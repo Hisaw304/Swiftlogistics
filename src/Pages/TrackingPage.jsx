@@ -11,7 +11,7 @@ const trackingData = {
     deliveryDate: "Arriving Monday, July 29",
     product: "Bluetooth Headphones",
     quantity: 1,
-    name: "John Doe",
+    name: "John Collins",
     address: "742 Evergreen Terrace, Springfield, IL 62704, USA",
   },
   "83d4ca15-0f35-48f5-b7a3-1ea210004f9m": {
