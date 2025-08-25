@@ -20,18 +20,27 @@ const Footer = () => {
           <h4 className="font-semibold text-white mb-3">Company</h4>
           <ul className="space-y-2">
             <li>
-              <Link to="/" className="hover:text-green-500">
+              <Link
+                to="/"
+                onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+                className="hover:text-green-500"
+              >
                 Home
               </Link>
             </li>
             <li>
-              <Link to="/contact" className="hover:text-green-500">
+              <Link
+                to="/contact"
+                onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+                className="hover:text-green-500"
+              >
                 Contact
               </Link>
             </li>
             <li>
               <Link
                 to="/track/15b6fc6f-327a-4ec4-896f-486349e85a5d"
+                onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
                 className="hover:text-green-500"
               >
                 Track
@@ -45,17 +54,17 @@ const Footer = () => {
           <h4 className="font-semibold text-white mb-3">Support</h4>
           <ul className="space-y-2">
             <li>
-              <a href="/faq" className="hover:text-green-500">
+              <a href="/" className="hover:text-green-500">
                 FAQ
               </a>
             </li>
             <li>
-              <a href="/help" className="hover:text-green-500">
+              <a href="/" className="hover:text-green-500">
                 Help Center
               </a>
             </li>
             <li>
-              <a href="/terms" className="hover:text-green-500">
+              <a href="/" className="hover:text-green-500">
                 Terms & Conditions
               </a>
             </li>
