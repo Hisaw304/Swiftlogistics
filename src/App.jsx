@@ -4,8 +4,8 @@ import { Toaster } from "react-hot-toast";
 
 import Navbar from "./components/Navbar";
 import Home from "./Pages/Home";
-import Contact from "./pages/Contact";
-import TrackingPage from "./pages/TrackingPage";
+import Contact from "./Pages/Contact";
+import TrackingPage from "./Pages/TrackingPage";
 import Footer from "./components/Footer";
 
 const App = () => {
