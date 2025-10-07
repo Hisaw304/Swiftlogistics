@@ -331,6 +331,32 @@ export default function TrackingPage() {
                 </div>
               </div>
             </div>
+            {/* Recipient Info Card */}
+            <div className="mt-4 bg-white rounded-lg p-4 shadow-sm">
+              <h3 className="text-base font-semibold text-gray-700 mb-2">
+                Recipient Information
+              </h3>
+              <div className="text-sm text-gray-600 space-y-1">
+                <div>
+                  <span className="font-medium text-gray-800">Name:</span>{" "}
+                  {data?.receiverName || data?.customerName || "—"}
+                </div>
+                <div>
+                  <span className="font-medium text-gray-800">Address:</span>{" "}
+                  {data?.address?.full || data?.address || "—"}
+                </div>
+                <div>
+                  <span className="font-medium text-gray-800">
+                    Destination:
+                  </span>{" "}
+                  {route?.slice(-1)[0]?.city || "—"}
+                </div>
+                <div>
+                  <span className="font-medium text-gray-800">Origin:</span>{" "}
+                  {data?.originWarehouse || "—"}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -363,37 +389,6 @@ export default function TrackingPage() {
                     currentLocation={data?.currentLocation}
                     height={420}
                   />
-
-                  {/* Recipient Info Card */}
-                  <div className="mt-4 bg-white rounded-lg p-4 shadow-sm">
-                    <h3 className="text-base font-semibold text-gray-700 mb-2">
-                      Recipient Information
-                    </h3>
-                    <div className="text-sm text-gray-600 space-y-1">
-                      <div>
-                        <span className="font-medium text-gray-800">Name:</span>{" "}
-                        {data?.customerName || "—"}
-                      </div>
-                      <div>
-                        <span className="font-medium text-gray-800">
-                          Address:
-                        </span>{" "}
-                        {data?.address?.full || "—"}
-                      </div>
-                      <div>
-                        <span className="font-medium text-gray-800">
-                          Destination:
-                        </span>{" "}
-                        {route?.slice(-1)[0]?.city || "—"}
-                      </div>
-                      <div>
-                        <span className="font-medium text-gray-800">
-                          Origin:
-                        </span>{" "}
-                        {data?.originWarehouse || "—"}
-                      </div>
-                    </div>
-                  </div>
                 </>
               ) : (
                 <div className="h-full flex items-center justify-center text-gray-500">
