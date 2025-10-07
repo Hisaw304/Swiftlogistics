@@ -4,10 +4,11 @@ import ImageUploader from "./ImageUploader";
 
 /*
   Props:
-    - onCreate(payload)    // called to create new record
-    - onUpdate(id, payload) // optional for edit mode
-    - initial (optional) object for edit mode (full doc)
+    - onCreate(payload)
+    - onUpdate(id, payload)
+    - initial (optional)
     - mode: "create" | "edit"
+    - onCancel (optional)
 */
 
 export default function AdminForm({
@@ -17,16 +18,16 @@ export default function AdminForm({
   mode = "create",
   onCancel,
 }) {
-  const [customerName, setCustomerName] = useState(initial?.customerName || "");
-  const [address, setAddress] = useState(initial?.address?.full || "");
+  const [receiverName, setReceiverName] = useState(initial?.receiverName || "");
+  const [address, setAddress] = useState(initial?.address || "");
+  const [city, setCity] = useState(initial?.city || "");
+  const [zip, setZip] = useState(initial?.zip || "");
   const [product, setProduct] = useState(initial?.product || "");
   const [quantity, setQuantity] = useState(initial?.quantity ?? 1);
   const [originWarehouse, setOriginWarehouse] = useState(
     initial?.originWarehouse || "Los Angeles, CA"
   );
-  const [destination, setDestination] = useState(
-    initial?.route?.slice(-1)[0]?.city || ""
-  );
+  const [destination, setDestination] = useState(initial?.destination || "");
   const [initialStatus, setInitialStatus] = useState(
     initial?.status || "Pending"
   );
@@ -36,12 +37,14 @@ export default function AdminForm({
 
   useEffect(() => {
     if (initial) {
-      setCustomerName(initial.customerName || "");
-      setAddress(initial.address?.full || "");
+      setReceiverName(initial.receiverName || "");
+      setAddress(initial.address || "");
+      setCity(initial.city || "");
+      setZip(initial.zip || "");
       setProduct(initial.product || "");
       setQuantity(initial.quantity ?? 1);
       setOriginWarehouse(initial.originWarehouse || "Los Angeles, CA");
-      setDestination(initial.route?.slice(-1)[0]?.city || "");
+      setDestination(initial.destination || "");
       setInitialStatus(initial.status || "Pending");
       setImageUrl(initial.imageUrl || null);
     }
@@ -53,28 +56,22 @@ export default function AdminForm({
     setLoading(true);
     try {
       const payload = {
-        customerName: customerName || undefined,
-        address: { full: address || undefined },
+        receiverName: receiverName || undefined,
+        address: address || undefined,
+        city: city || undefined,
+        zip: zip || undefined,
         product,
         quantity,
         originWarehouse,
         destination,
         imageUrl,
-        initialStatus,
+        status: initialStatus,
       };
+
       if (mode === "create") {
-        const created = await onCreate(payload);
-        // parent will handle state update
+        await onCreate(payload);
       } else if (mode === "edit" && onUpdate && initial) {
-        await onUpdate(initial._id || initial.trackingId, {
-          customerName,
-          address: { full: address },
-          product,
-          quantity,
-          originWarehouse,
-          imageUrl,
-          status: initialStatus,
-        });
+        await onUpdate(initial._id || initial.trackingId, payload);
       }
     } catch (err) {
       setError(err.message || "Failed");
@@ -88,9 +85,10 @@ export default function AdminForm({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <input
           className="p-2 border rounded"
-          placeholder="Customer name"
-          value={customerName}
-          onChange={(e) => setCustomerName(e.target.value)}
+          placeholder="Recipient Name"
+          value={receiverName}
+          onChange={(e) => setReceiverName(e.target.value)}
+          required
         />
         <input
           className="p-2 border rounded"
@@ -126,10 +124,24 @@ export default function AdminForm({
         />
         <input
           className="p-2 border rounded md:col-span-2"
-          placeholder="Address (optional / full)"
+          placeholder="Address"
           value={address}
           onChange={(e) => setAddress(e.target.value)}
         />
+        <div className="flex gap-3 md:col-span-2">
+          <input
+            className="p-2 border rounded flex-1"
+            placeholder="City"
+            value={city}
+            onChange={(e) => setCity(e.target.value)}
+          />
+          <input
+            className="p-2 border rounded w-32"
+            placeholder="ZIP"
+            value={zip}
+            onChange={(e) => setZip(e.target.value)}
+          />
+        </div>
       </div>
 
       <div>
