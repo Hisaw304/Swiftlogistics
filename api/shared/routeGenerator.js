@@ -1,4 +1,4 @@
-// /api/_shared/routeGenerator.js
+// /api/shared/routeGenerator.js
 // Small demo city lookup + route generator for portfolio demo.
 
 const CITY_LIST = [
