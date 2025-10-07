@@ -143,6 +143,36 @@ export default function TrackingPage() {
       return new Date(iso).toLocaleString();
     }
   };
+  // place somewhere near formatTime helper
+  const formatLocation = (loc) => {
+    if (!loc) return "—";
+    // already a string
+    if (typeof loc === "string") return loc;
+    // array [lng, lat]
+    if (Array.isArray(loc)) {
+      if (
+        loc.length >= 2 &&
+        typeof loc[0] === "number" &&
+        typeof loc[1] === "number"
+      )
+        return `${loc[1].toFixed(4)}, ${loc[0].toFixed(4)}`;
+      return JSON.stringify(loc);
+    }
+    // GeoJSON Point: { type: "Point", coordinates: [lng, lat] }
+    if (loc.type === "Point" && Array.isArray(loc.coordinates)) {
+      const [lng, lat] = loc.coordinates;
+      return `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+    }
+    // lat/lng fields
+    if (typeof loc.lat === "number" && typeof loc.lng === "number")
+      return `${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)}`;
+    // fallback
+    try {
+      return JSON.stringify(loc);
+    } catch {
+      return "—";
+    }
+  };
 
   // small UI actions
   const copyId = async () => {
@@ -321,7 +351,7 @@ export default function TrackingPage() {
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-semibold">Delivery Route Map</h2>
               <div className="text-xs text-gray-400">
-                Current location: {data?.currentLocation || "—"}
+                Current location: {formatLocation(data?.currentLocation)}
               </div>
             </div>
             <div className="rounded overflow-hidden h-[420px] bg-gray-50">
