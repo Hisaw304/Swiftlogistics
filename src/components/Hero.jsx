@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { motion } from "framer-motion";
 import { Search } from "lucide-react";
-import heroImage from "../assets/hero-bg.jpg"; // your hero background image
+import heroImage from "../assets/hero-bg.jpeg"; // your hero background image
 
 const HeroSection = () => {
   const [trackingId, setTrackingId] = useState("");
