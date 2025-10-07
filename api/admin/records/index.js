@@ -1,5 +1,5 @@
 // /api/admin/records/index.js
-import { connectToDatabase } from "../../_shared/mongo.js";
+import { connectToDatabase } from "../../shared/mongo.js";
 import { generateRoute } from "../../_shared/routeGenerator.js";
 
 import crypto from "crypto";

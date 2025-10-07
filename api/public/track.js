@@ -1,5 +1,5 @@
 // /api/public/track.js
-import { connectToDatabase } from "../_shared/mongo.js";
+import { connectToDatabase } from "../shared/mongo.js";
 
 export default async function handler(req, res) {
   res.setHeader("Content-Type", "application/json");

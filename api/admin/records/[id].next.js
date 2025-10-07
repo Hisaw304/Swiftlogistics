@@ -1,6 +1,6 @@
 // /api/admin/records/[id].next.js
 import { ObjectId } from "mongodb";
-import { connectToDatabase } from "../../_shared/mongo.js";
+import { connectToDatabase } from "../../shared/mongo.js";
 
 function requireAdmin(req) {
   const key = req.headers["x-admin-key"] || req.query.adminKey;

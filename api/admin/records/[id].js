@@ -1,6 +1,6 @@
 // /api/admin/records/[id].js
 import { ObjectId } from "mongodb";
-import { connectToDatabase } from "../../_shared/mongo.js";
+import { connectToDatabase } from "../../shared/mongo.js";
 
 const ADMIN = (req) => {
   const key = req.headers["x-admin-key"] || req.query.adminKey;
