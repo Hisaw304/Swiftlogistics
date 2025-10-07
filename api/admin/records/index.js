@@ -51,26 +51,37 @@ export default async function handler(req, res) {
 
     const doc = {
       trackingId,
-      customerName: body.customerName || null,
+      customerName: body.customerName?.trim() || "Unknown Recipient",
       address: {
         full:
-          (body.address && typeof body.address === "object"
-            ? body.address.full
-            : body.addressFull || body.address) || null,
-        city: body.city || body.address?.city || null,
-        state: body.state || body.address?.state || "Texas",
-        zip: body.zip || body.address?.zip || null,
+          (typeof body.address === "object"
+            ? body.address.full?.trim()
+            : body.addressFull?.trim() || body.address?.trim()) ||
+          "Unknown Address",
+        city:
+          body.city?.trim() ||
+          (typeof body.address === "object" ? body.address.city?.trim() : "") ||
+          "Unknown City",
+        state:
+          body.state?.trim() ||
+          (typeof body.address === "object"
+            ? body.address.state?.trim()
+            : "") ||
+          "Texas",
+        zip:
+          body.zip?.trim() ||
+          (typeof body.address === "object" ? body.address.zip?.trim() : "") ||
+          "",
       },
-      product: body.product || "Unknown Product",
+      product: body.product?.trim() || "Unknown Product",
       quantity: body.quantity ?? 1,
       imageUrl: body.imageUrl || null,
       status: body.initialStatus || "Pending",
-      originWarehouse: body.originWarehouse || "Los Angeles, CA",
+      originWarehouse: body.originWarehouse?.trim() || "Los Angeles, CA",
       route: generateRoute(
         body.originWarehouse || "Los Angeles, CA",
         body.destination || "Austin, TX"
       ),
-
       currentIndex: 0,
       locationHistory: [],
       createdAt: now,
