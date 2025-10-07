@@ -1,18 +1,19 @@
 // /api/admin/records/index.js
 import { connectToDatabase } from "../../_shared/mongo";
 import { generateRoute } from "../../_shared/routeGenerator";
+import crypto from "crypto";
 
 function requireAdmin(req) {
   const key = req.headers["x-admin-key"] || req.query.adminKey;
   return key && key === process.env.ADMIN_KEY;
 }
 
-function makeTrackingId(len = 6) {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  let s = "";
-  for (let i = 0; i < len; i++)
-    s += chars.charAt(Math.floor(Math.random() * chars.length));
-  return `TRK-${s}`;
+// Generate UUID-like tracking IDs (e.g. 15b6fc6f-327a-4ec4-896f-486349e85a5d)
+function makeTrackingId() {
+  const buf = crypto.randomUUID
+    ? crypto.randomUUID()
+    : crypto.randomBytes(16).toString("hex");
+  return buf;
 }
 
 export default async function handler(req, res) {
@@ -54,7 +55,7 @@ export default async function handler(req, res) {
         .status(400)
         .json({ error: "product and destination required" });
 
-    // generate unique trackingId
+    // Generate unique UUID-style tracking ID
     let trackingId;
     for (let i = 0; i < 5; i++) {
       trackingId = makeTrackingId();
