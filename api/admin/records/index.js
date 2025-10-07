@@ -1,6 +1,7 @@
 // /api/admin/records/index.js
-import { connectToDatabase } from "../../_shared/mongo";
-import { generateRoute } from "../../_shared/routeGenerator";
+import { connectToDatabase } from "../../_shared/mongo.js";
+import { generateRoute } from "../../_shared/routeGenerator.js";
+
 import crypto from "crypto";
 
 function requireAdmin(req) {
