@@ -355,8 +355,13 @@ export default function TrackingPage() {
                     >
                       <div>
                         <div className="font-medium">
-                          {h.city || (h.location ? "Lat/Lng update" : "Update")}
+                          {typeof h.city === "string"
+                            ? h.city
+                            : h.location
+                            ? "Lat/Lng update"
+                            : "Update"}
                         </div>
+
                         <div className="text-xs text-gray-500">
                           {h.note || ""}
                         </div>
