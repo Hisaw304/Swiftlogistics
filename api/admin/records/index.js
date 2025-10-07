@@ -46,8 +46,7 @@ export default async function handler(req, res) {
   if (req.method === "POST") {
     const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
     const now = new Date().toISOString();
-    const trackingId =
-      body.trackingId || "TRK-" + randomUUID().slice(0, 8).toUpperCase();
+    const trackingId = body.trackingId || randomUUID();
 
     const doc = {
       trackingId,

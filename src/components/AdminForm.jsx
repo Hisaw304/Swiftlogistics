@@ -18,10 +18,11 @@ export default function AdminForm({
   mode = "create",
   onCancel,
 }) {
-  const [receiverName, setReceiverName] = useState(initial?.receiverName || "");
-  const [address, setAddress] = useState(initial?.address || "");
-  const [city, setCity] = useState(initial?.city || "");
-  const [zip, setZip] = useState(initial?.zip || "");
+  // use the same names the backend uses: customerName, address:{ full, city, zip }
+  const [customerName, setCustomerName] = useState(initial?.customerName || "");
+  const [addressFull, setAddressFull] = useState(initial?.address?.full || "");
+  const [city, setCity] = useState(initial?.address?.city || "");
+  const [zip, setZip] = useState(initial?.address?.zip || "");
   const [product, setProduct] = useState(initial?.product || "");
   const [quantity, setQuantity] = useState(initial?.quantity ?? 1);
   const [originWarehouse, setOriginWarehouse] = useState(
@@ -37,10 +38,10 @@ export default function AdminForm({
 
   useEffect(() => {
     if (initial) {
-      setReceiverName(initial.receiverName || "");
-      setAddress(initial.address || "");
-      setCity(initial.city || "");
-      setZip(initial.zip || "");
+      setCustomerName(initial.customerName || "");
+      setAddressFull(initial.address?.full || "");
+      setCity(initial.address?.city || "");
+      setZip(initial.address?.zip || "");
       setProduct(initial.product || "");
       setQuantity(initial.quantity ?? 1);
       setOriginWarehouse(initial.originWarehouse || "Los Angeles, CA");
@@ -55,26 +56,39 @@ export default function AdminForm({
     setError(null);
     setLoading(true);
     try {
+      // deliver address as an object to match backend expectations
       const payload = {
-        receiverName: receiverName || undefined,
-        address: address || undefined,
-        city: city || undefined,
-        zip: zip || undefined,
+        customerName: customerName || undefined,
+        address: {
+          full: addressFull || undefined,
+          city: city || undefined,
+          zip: zip || undefined,
+        },
         product,
         quantity,
         originWarehouse,
         destination,
         imageUrl,
-        status: initialStatus,
+        initialStatus,
+        status: initialStatus, // backend expects `initialStatus` on create, `status` on update — keep both if needed
       };
 
       if (mode === "create") {
         await onCreate(payload);
       } else if (mode === "edit" && onUpdate && initial) {
-        await onUpdate(initial._id || initial.trackingId, payload);
+        // keep update payload minimal — backend /patch will accept allowed fields
+        await onUpdate(initial._id || initial.trackingId, {
+          customerName: payload.customerName,
+          address: payload.address,
+          product: payload.product,
+          quantity: payload.quantity,
+          originWarehouse: payload.originWarehouse,
+          imageUrl: payload.imageUrl,
+          status: payload.status,
+        });
       }
     } catch (err) {
-      setError(err.message || "Failed");
+      setError(err?.message || "Failed");
     } finally {
       setLoading(false);
     }
@@ -85,11 +99,12 @@ export default function AdminForm({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <input
           className="p-2 border rounded"
-          placeholder="Recipient Name"
-          value={receiverName}
-          onChange={(e) => setReceiverName(e.target.value)}
+          placeholder="Customer / Recipient Name"
+          value={customerName}
+          onChange={(e) => setCustomerName(e.target.value)}
           required
         />
+
         <input
           className="p-2 border rounded"
           placeholder="Product"
@@ -97,6 +112,7 @@ export default function AdminForm({
           onChange={(e) => setProduct(e.target.value)}
           required
         />
+
         <input
           className="p-2 border rounded"
           placeholder="Quantity"
@@ -105,6 +121,7 @@ export default function AdminForm({
           value={quantity}
           onChange={(e) => setQuantity(Number(e.target.value))}
         />
+
         <select
           className="p-2 border rounded"
           value={originWarehouse}
@@ -115,6 +132,7 @@ export default function AdminForm({
           <option>New York, NY</option>
           <option>Dallas, TX</option>
         </select>
+
         <input
           className="p-2 border rounded md:col-span-2"
           placeholder="Destination (City, ST)"
@@ -122,12 +140,14 @@ export default function AdminForm({
           onChange={(e) => setDestination(e.target.value)}
           required
         />
+
         <input
           className="p-2 border rounded md:col-span-2"
-          placeholder="Address"
-          value={address}
-          onChange={(e) => setAddress(e.target.value)}
+          placeholder="Street address (full)"
+          value={addressFull}
+          onChange={(e) => setAddressFull(e.target.value)}
         />
+
         <div className="flex gap-3 md:col-span-2">
           <input
             className="p-2 border rounded flex-1"
