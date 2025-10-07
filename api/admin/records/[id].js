@@ -8,7 +8,24 @@ const ADMIN = (req) => {
 };
 
 export default async function handler(req, res) {
+  // === CORS setup ===
+  const CORS_HEADERS = {
+    "Access-Control-Allow-Origin": "https://swiftlogistics-mu.vercel.app",
+    "Access-Control-Allow-Methods": "GET,POST,PATCH,DELETE,OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type,x-admin-key",
+  };
+
+  // Respond to preflight
+  if (req.method === "OPTIONS") {
+    Object.entries(CORS_HEADERS).forEach(([k, v]) => res.setHeader(k, v));
+    return res.status(204).end();
+  }
+
+  // Apply to all actual responses
+  Object.entries(CORS_HEADERS).forEach(([k, v]) => res.setHeader(k, v));
   res.setHeader("Content-Type", "application/json");
+
+  // === Auth check ===
   if (!ADMIN(req)) return res.status(401).json({ error: "Unauthorized" });
 
   const { db } = await connectToDatabase();
@@ -41,8 +58,10 @@ export default async function handler(req, res) {
     });
     if (Object.keys(set).length === 0)
       return res.status(400).json({ error: "No valid fields" });
+
     set.updatedAt = new Date().toISOString();
     set.lastUpdated = set.updatedAt;
+
     await col.updateOne(filter, { $set: set });
     const updated = await col.findOne(filter);
     return res.json(updated);

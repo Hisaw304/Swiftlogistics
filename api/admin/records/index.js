@@ -1,110 +1,75 @@
 // /api/admin/records/index.js
 import { connectToDatabase } from "../../shared/mongo.js";
-import { generateRoute } from "../../shared/routeGenerator.js";
+import { randomUUID } from "crypto";
 
-import crypto from "crypto";
-
-function requireAdmin(req) {
+const ADMIN = (req) => {
   const key = req.headers["x-admin-key"] || req.query.adminKey;
   return key && key === process.env.ADMIN_KEY;
-}
-
-// Generate UUID-like tracking IDs (e.g. 15b6fc6f-327a-4ec4-896f-486349e85a5d)
-function makeTrackingId() {
-  const buf = crypto.randomUUID
-    ? crypto.randomUUID()
-    : crypto.randomBytes(16).toString("hex");
-  return buf;
-}
+};
 
 export default async function handler(req, res) {
+  // === CORS setup ===
+  const CORS_HEADERS = {
+    "Access-Control-Allow-Origin": "https://swiftlogistics-mu.vercel.app",
+    "Access-Control-Allow-Methods": "GET,POST,PATCH,DELETE,OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type,x-admin-key",
+  };
+
+  // Respond to preflight
+  if (req.method === "OPTIONS") {
+    Object.entries(CORS_HEADERS).forEach(([k, v]) => res.setHeader(k, v));
+    return res.status(204).end();
+  }
+
+  // Apply headers to all other responses
+  Object.entries(CORS_HEADERS).forEach(([k, v]) => res.setHeader(k, v));
   res.setHeader("Content-Type", "application/json");
-  if (!requireAdmin(req))
-    return res.status(401).json({ error: "Unauthorized (admin key required)" });
+
+  // === Auth check ===
+  if (!ADMIN(req)) return res.status(401).json({ error: "Unauthorized" });
 
   const { db } = await connectToDatabase();
   const col = db.collection("trackings");
 
   if (req.method === "GET") {
-    const page = Math.max(1, parseInt(req.query.page || "1", 10));
-    const limit = Math.min(200, parseInt(req.query.limit || "50", 10));
+    const page = parseInt(req.query.page || "1", 10);
+    const limit = parseInt(req.query.limit || "100", 10);
     const skip = (page - 1) * limit;
-    const docs = await col
-      .find({})
-      .sort({ lastUpdated: -1 })
-      .skip(skip)
-      .limit(limit)
-      .toArray();
-    return res.json({ items: docs, page });
+
+    const cursor = col.find({}).sort({ createdAt: -1 }).skip(skip).limit(limit);
+    const items = await cursor.toArray();
+    const total = await col.countDocuments();
+
+    return res.json({ items, total, page, limit });
   }
 
   if (req.method === "POST") {
     const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
-    const {
-      customerName,
-      address = {},
-      product,
-      quantity = 1,
-      originWarehouse,
-      destination,
-      imageUrl,
-      initialStatus,
-    } = body;
+    const now = new Date().toISOString();
+    const trackingId =
+      body.trackingId || "TRK-" + randomUUID().slice(0, 8).toUpperCase();
 
-    if (!product || !destination)
-      return res
-        .status(400)
-        .json({ error: "product and destination required" });
-
-    // Generate unique UUID-style tracking ID
-    let trackingId;
-    for (let i = 0; i < 5; i++) {
-      trackingId = makeTrackingId();
-      const exists = await col.findOne({ trackingId });
-      if (!exists) break;
-      trackingId = null;
-    }
-    if (!trackingId)
-      return res.status(500).json({ error: "Failed to generate trackingId" });
-
-    const route = generateRoute(
-      originWarehouse || "Los Angeles, CA",
-      destination
-    );
-    const now = new Date();
     const doc = {
       trackingId,
-      customerName: customerName || null,
-      address: {
-        full: address.full || null,
-        street: address.street || null,
-        city: address.city || null,
-        state: address.state || null,
-        zip: address.zip || null,
-      },
-      product,
-      quantity,
-      imageUrl: imageUrl || null,
-      originWarehouse: originWarehouse || null,
-      route,
-      currentIndex: 0,
-      currentLocation: route[0].location,
-      locationHistory: [
-        {
-          timestamp: now.toISOString(),
-          location: route[0].location,
-          city: route[0].city,
-          note: "Created",
-        },
+      customerName: body.customerName || null,
+      address: body.address || {},
+      product: body.product || "Unknown Product",
+      quantity: body.quantity ?? 1,
+      imageUrl: body.imageUrl || null,
+      status: body.initialStatus || "Pending",
+      originWarehouse: body.originWarehouse || "Los Angeles, CA",
+      route: [
+        { city: body.originWarehouse || "Los Angeles, CA", eta: now },
+        ...(body.destination ? [{ city: body.destination, eta: null }] : []),
       ],
-      status: initialStatus || "Pending",
-      lastUpdated: now.toISOString(),
-      createdAt: now.toISOString(),
-      updatedAt: now.toISOString(),
+      currentIndex: 0,
+      locationHistory: [],
+      createdAt: now,
+      lastUpdated: now,
     };
 
-    const r = await col.insertOne(doc);
-    return res.status(201).json({ ...doc, _id: r.insertedId });
+    await col.insertOne(doc);
+    return res.status(201).json(doc);
   }
 
   return res.status(405).json({ error: "Method not allowed" });
