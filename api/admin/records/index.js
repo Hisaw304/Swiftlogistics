@@ -1,6 +1,7 @@
 // /api/admin/records/index.js
 import { connectToDatabase } from "../../shared/mongo.js";
 import { randomUUID } from "crypto";
+import { generateRoute } from "../../shared/routeGenerator.js";
 
 const ADMIN = (req) => {
   const key = req.headers["x-admin-key"] || req.query.adminKey;
@@ -51,16 +52,25 @@ export default async function handler(req, res) {
     const doc = {
       trackingId,
       customerName: body.customerName || null,
-      address: body.address || {},
+      address: {
+        full:
+          (body.address && typeof body.address === "object"
+            ? body.address.full
+            : body.addressFull || body.address) || null,
+        city: body.city || body.address?.city || null,
+        state: body.state || body.address?.state || "Texas",
+        zip: body.zip || body.address?.zip || null,
+      },
       product: body.product || "Unknown Product",
       quantity: body.quantity ?? 1,
       imageUrl: body.imageUrl || null,
       status: body.initialStatus || "Pending",
       originWarehouse: body.originWarehouse || "Los Angeles, CA",
-      route: [
-        { city: body.originWarehouse || "Los Angeles, CA", eta: now },
-        ...(body.destination ? [{ city: body.destination, eta: null }] : []),
-      ],
+      route: generateRoute(
+        body.originWarehouse || "Los Angeles, CA",
+        body.destination || "Austin, TX"
+      ),
+
       currentIndex: 0,
       locationHistory: [],
       createdAt: now,
