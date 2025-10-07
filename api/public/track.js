@@ -12,28 +12,38 @@ export default async function handler(req, res) {
 
   const { db } = await connectToDatabase();
   const record = await db.collection("trackings").findOne({ trackingId });
-
   if (!record) return res.status(404).json({ error: "Not found" });
 
-  // Public-safe view: omit recipient street/name; include status/route/progress/image
   const route = (record.route || []).map((r) => ({
     city: r.city,
     zip: r.zip,
     location: r.location,
     eta: r.eta,
   }));
+
   const currentIndex = record.currentIndex ?? 0;
   const progressPct =
     route.length > 1
       ? Math.round((currentIndex / (route.length - 1)) * 100)
       : 0;
 
+  // ✅ Include non-sensitive recipient info
   return res.json({
     trackingId: record.trackingId,
     product: record.product,
     quantity: record.quantity || 1,
     status: record.status,
     imageUrl: record.imageUrl || null,
+    originWarehouse: record.originWarehouse || "—",
+    customerName: record.customerName || null,
+    address: record.address
+      ? {
+          full: record.address.full || "",
+          city: record.address.city || "",
+          state: record.address.state || "",
+          zip: record.address.zip || "",
+        }
+      : null,
     route,
     currentIndex,
     currentLocation:

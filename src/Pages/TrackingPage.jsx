@@ -331,7 +331,6 @@ export default function TrackingPage() {
                 </div>
               </div>
             </div>
-            {/* Recipient Info Card */}
             <div className="mt-4 bg-white rounded-lg p-4 shadow-sm">
               <h3 className="text-base font-semibold text-gray-700 mb-2">
                 Recipient Information
@@ -339,17 +338,19 @@ export default function TrackingPage() {
               <div className="text-sm text-gray-600 space-y-1">
                 <div>
                   <span className="font-medium text-gray-800">Name:</span>{" "}
-                  {data?.receiverName || data?.customerName || "—"}
+                  {data?.customerName || "—"}
                 </div>
                 <div>
                   <span className="font-medium text-gray-800">Address:</span>{" "}
-                  {data?.address?.full || data?.address || "—"}
+                  {data?.address?.full
+                    ? `${data.address.full}, ${data.address.city}, ${data.address.state} ${data.address.zip}`
+                    : "—"}
                 </div>
                 <div>
                   <span className="font-medium text-gray-800">
                     Destination:
                   </span>{" "}
-                  {route?.slice(-1)[0]?.city || "—"}
+                  {data?.route?.slice(-1)[0]?.city || "—"}
                 </div>
                 <div>
                   <span className="font-medium text-gray-800">Origin:</span>{" "}
