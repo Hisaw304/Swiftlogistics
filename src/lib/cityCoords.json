@@ -1,0 +1,92 @@
+[
+  {
+    "city": "Los Angeles",
+    "state": "CA",
+    "zip": "90001",
+    "coords": [-118.2437, 34.0522]
+  },
+  {
+    "city": "San Diego",
+    "state": "CA",
+    "zip": "92101",
+    "coords": [-117.1611, 32.7157]
+  },
+  {
+    "city": "Phoenix",
+    "state": "AZ",
+    "zip": "85001",
+    "coords": [-112.074, 33.4484]
+  },
+  {
+    "city": "Dallas",
+    "state": "TX",
+    "zip": "75201",
+    "coords": [-96.797, 32.7767]
+  },
+  {
+    "city": "Austin",
+    "state": "TX",
+    "zip": "73301",
+    "coords": [-97.7431, 30.2672]
+  },
+  {
+    "city": "Memphis",
+    "state": "TN",
+    "zip": "38101",
+    "coords": [-90.049, 35.1495]
+  },
+  {
+    "city": "Atlanta",
+    "state": "GA",
+    "zip": "30301",
+    "coords": [-84.388, 33.749]
+  },
+  {
+    "city": "Charlotte",
+    "state": "NC",
+    "zip": "28202",
+    "coords": [-80.8431, 35.2271]
+  },
+  {
+    "city": "Chicago",
+    "state": "IL",
+    "zip": "60601",
+    "coords": [-87.6298, 41.8781]
+  },
+  {
+    "city": "New York",
+    "state": "NY",
+    "zip": "10001",
+    "coords": [-74.006, 40.7128]
+  },
+  {
+    "city": "Orlando",
+    "state": "FL",
+    "zip": "32801",
+    "coords": [-81.3792, 28.5383]
+  },
+  {
+    "city": "Denver",
+    "state": "CO",
+    "zip": "80201",
+    "coords": [-104.9903, 39.7392]
+  },
+  {
+    "city": "San Francisco",
+    "state": "CA",
+    "zip": "94102",
+    "coords": [-122.4194, 37.7749]
+  },
+  {
+    "city": "Portland",
+    "state": "OR",
+    "zip": "97201",
+    "coords": [-122.6765, 45.5231]
+  },
+  {
+    "city": "Seattle",
+    "state": "WA",
+    "zip": "98101",
+    "coords": [-122.3321, 47.6062]
+  }
+]

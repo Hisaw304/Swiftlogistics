@@ -7,6 +7,7 @@ import Home from "./Pages/Home";
 import Contact from "./Pages/Contact";
 import TrackingPage from "./Pages/TrackingPage";
 import Footer from "./components/Footer";
+import AdminPage from "./Pages/AdminPage";
 
 const App = () => {
   return (
@@ -23,6 +24,7 @@ const App = () => {
           <Route path="/" element={<Home />} />
           <Route path="/contact" element={<Contact />} />
           <Route path="/track/:id" element={<TrackingPage />} />
+          <Route path="/admin" element={<AdminPage />} />
         </Routes>
       </main>
 
