@@ -43,8 +43,36 @@ export default async function handler(req, res) {
   // === Database connection ===
   const { db } = await connectToDatabase();
   const col = db.collection("trackings");
+  // robust id extraction — handles cases where req.query.id may be undefined
+  let id = (() => {
+    // prefer Next/Vercel style param if present
+    try {
+      if (req.query && req.query.id) return req.query.id;
+    } catch (e) {}
 
-  const { id } = req.query;
+    // fallback: try to parse from URL path (works even if rewrites removed query)
+    try {
+      // req.url can be like "/api/admin/records/<id>" or "/api/admin/records/<id>?..."
+      const url = req.url || req.originalUrl || "";
+      const parts = url.split("/").filter(Boolean);
+      // find last segment after "records"
+      const idx = parts.lastIndexOf("records");
+      if (idx >= 0 && parts.length > idx + 1) {
+        return parts
+          .slice(idx + 1)
+          .join("/")
+          .split("?")[0];
+      }
+      // otherwise, try full path last segment
+      if (parts.length > 0) {
+        return parts[parts.length - 1].split("?")[0];
+      }
+    } catch (e) {}
+
+    // last resort: undefined
+    return undefined;
+  })();
+  console.log("➡️ resolved id:", id);
 
   // === Helper to build filters ===
   const buildFilters = (rawId) => {
