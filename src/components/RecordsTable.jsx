@@ -1,5 +1,5 @@
-// src/components/RecordsTable.jsx
 import React from "react";
+import ProgressBar from "./ProgressBar";
 
 function formatTime(iso) {
   if (!iso) return "—";
@@ -20,6 +20,20 @@ function idToString(id, trackingId) {
   } catch {
     return trackingId || String(id);
   }
+}
+
+// compute fallback progress from route/currentIndex
+function computeProgressFromRoute(r) {
+  const routeLen = Array.isArray(r?.route) ? r.route.length : 0;
+  const idx = typeof r?.currentIndex === "number" ? r.currentIndex : 0;
+  if (routeLen > 1) return Math.round((idx / (routeLen - 1)) * 100);
+  // fallback mapping from status if no route
+  const s = (r?.status || "").toLowerCase();
+  if (s === "delivered") return 100;
+  if (s === "out for delivery") return 85;
+  if (s === "shipped") return 50;
+  if (s === "on hold") return 10;
+  return 0;
 }
 
 export default function RecordsTable({
@@ -46,16 +60,25 @@ export default function RecordsTable({
         <tbody>
           {records.map((r) => {
             const currentCity =
-              r.route && r.route[r.currentIndex]
+              r.route &&
+              typeof r.currentIndex === "number" &&
+              r.route[r.currentIndex]
                 ? r.route[r.currentIndex].city
                 : "—";
+
+            // Prefer server-provided progressPct; fallback to compute
             const progress =
-              r.route && r.route.length > 1
-                ? Math.round((r.currentIndex / (r.route.length - 1)) * 100)
-                : 0;
+              typeof r.progressPct === "number" && !Number.isNaN(r.progressPct)
+                ? Math.max(0, Math.min(100, Math.round(r.progressPct)))
+                : computeProgressFromRoute(r);
 
             const key = idToString(r._id, r.trackingId);
             const idString = key; // normalized string id used by buttons
+
+            const atFinal =
+              Array.isArray(r.route) && r.route.length > 0
+                ? (r.currentIndex ?? 0) >= r.route.length - 1
+                : false;
 
             return (
               <tr key={key} className="border-t">
@@ -68,6 +91,9 @@ export default function RecordsTable({
                 <td className="px-3 py-2 align-top">
                   <div>{r.status}</div>
                   <div className="text-xs text-gray-400">{progress}%</div>
+                  <div className="mt-2">
+                    <ProgressBar progress={progress} status={r.status} />
+                  </div>
                 </td>
                 <td className="px-3 py-2 align-top text-xs text-gray-500">
                   {formatTime(r.lastUpdated)}
@@ -87,8 +113,14 @@ export default function RecordsTable({
                 </td>
                 <td className="px-3 py-2 align-top space-x-2">
                   <button
-                    className="px-2 py-1 bg-blue-600 text-white text-xs rounded"
+                    className="px-2 py-1 bg-blue-600 text-white text-xs rounded disabled:opacity-50"
                     onClick={() => onNext && onNext(idString)}
+                    disabled={atFinal}
+                    title={
+                      atFinal
+                        ? "Already at final checkpoint"
+                        : "Advance to next checkpoint"
+                    }
                   >
                     Next Stop
                   </button>

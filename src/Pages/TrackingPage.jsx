@@ -285,24 +285,48 @@ export default function TrackingPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Left column: image + product */}
-        <div className="md:col-span-1 bg-white rounded-lg p-4 shadow-sm">
+        {/* Left column: image + grouped cards */}
+        <div className="md:col-span-1 bg-white rounded-lg p-4 shadow-sm space-y-4">
+          {/* Image */}
           <div className="w-full h-64 bg-gray-50 rounded overflow-hidden flex items-center justify-center">
             <img
               src={imgSrc}
-              alt={data?.product || "Product image"}
+              alt={data?.productDescription || data?.product || "Product image"}
               onError={() => setImgError(true)}
               className="max-h-full max-w-full object-contain"
             />
           </div>
 
-          <div className="mt-4">
-            <div className="flex items-center gap-2 text-sm text-gray-600">
-              <Package size={14} />{" "}
-              <span className="font-medium">{data?.product || "Product"}</span>
+          {/* Shipment Summary Card */}
+          <div className="bg-gray-50 rounded p-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <Package size={14} />
+                <div>
+                  <div className="font-medium text-gray-800">
+                    {data?.productDescription || data?.product || "Product"}
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    {data?.serviceType ? `${data.serviceType}` : "Service: —"}
+                    {data?.shipmentDetails ? ` • ${data.shipmentDetails}` : ""}
+                  </div>
+                </div>
+              </div>
+              <div className="text-sm text-gray-600">
+                Qty: {data?.quantity ?? 1}
+              </div>
             </div>
-            <div className="text-sm text-gray-500 mt-1">
-              Quantity: {data?.quantity ?? 1}
+
+            <div className="mt-3 text-sm text-gray-600">
+              <div>
+                <span className="font-medium text-gray-800">Weight:</span>{" "}
+                {data?.weightKg ? `${data.weightKg} kg` : "—"}
+              </div>
+              {data?.description && (
+                <div className="mt-1 text-xs text-gray-500">
+                  {data.description}
+                </div>
+              )}
             </div>
 
             <div className="mt-3">
@@ -319,43 +343,138 @@ export default function TrackingPage() {
                 {status}
               </div>
             </div>
+          </div>
 
-            <div className="mt-4">
-              <div className="text-xs text-gray-500">Delivery Progress</div>
-              <div className="mt-2">
-                <ProgressBar progress={progress} />
-                <div className="text-xs text-gray-400 mt-1">
-                  {progress}% • Checkpoint{" "}
-                  {Math.min(currentIndex + 1, route.length)} of{" "}
-                  {route.length || "?"}
-                </div>
+          {/* Progress Card */}
+          <div className="bg-white rounded p-3 border">
+            <div className="text-xs text-gray-500">Delivery Progress</div>
+            <div className="mt-2">
+              <ProgressBar progress={progress} status={status} />
+              <div className="text-xs text-gray-400 mt-1">
+                {progress}% • Checkpoint{" "}
+                {Math.min(currentIndex + 1, route.length)} of{" "}
+                {route.length || "?"}
               </div>
             </div>
-            <div className="mt-4 bg-white rounded-lg p-4 shadow-sm">
-              <h3 className="text-base font-semibold text-gray-700 mb-2">
-                Recipient Information
-              </h3>
-              <div className="text-sm text-gray-600 space-y-1">
+          </div>
+
+          {/* Recipient Information Card */}
+          <div className="bg-white rounded p-3 border">
+            <h3 className="text-base font-semibold text-gray-700 mb-2">
+              Recipient Information
+            </h3>
+            <div className="text-sm text-gray-600 space-y-1">
+              <div>
+                <span className="font-medium text-gray-800">Name:</span>{" "}
+                {data?.destination?.receiverName || data?.customerName || "—"}
+              </div>
+
+              <div>
+                <span className="font-medium text-gray-800">Email:</span>{" "}
+                {data?.destination?.receiverEmail || "—"}
+              </div>
+
+              <div>
+                <span className="font-medium text-gray-800">Address:</span>{" "}
+                {data?.destination?.address?.full
+                  ? `${data.destination.address.full}, ${
+                      data.destination.address.city || ""
+                    }${
+                      data.destination.address.state
+                        ? `, ${data.destination.address.state}`
+                        : ""
+                    } ${data.destination.address.zip || ""}`
+                  : data?.address?.full
+                  ? `${data.address.full}, ${data.address.city || ""}${
+                      data.address.state ? `, ${data.address.state}` : ""
+                    } ${data.address.zip || ""}`
+                  : "—"}
+              </div>
+
+              <div>
+                <span className="font-medium text-gray-800">Destination:</span>{" "}
+                {data?.route?.slice(-1)[0]?.city || "—"}
+              </div>
+            </div>
+          </div>
+
+          {/* Origin / Sender Card */}
+          <div className="bg-white rounded p-3 border">
+            <h3 className="text-base font-semibold text-gray-700 mb-2">
+              Origin / Sender
+            </h3>
+            <div className="text-sm text-gray-600 space-y-1">
+              <div>
+                <span className="font-medium text-gray-800">Sender:</span>{" "}
+                {data?.origin?.name || data?.originWarehouse || "—"}
+              </div>
+
+              <div>
+                <span className="font-medium text-gray-800">
+                  Sender Address:
+                </span>{" "}
+                {data?.origin?.address?.full
+                  ? `${data.origin.address.full}, ${
+                      data.origin.address.city || ""
+                    }${
+                      data.origin.address.state
+                        ? `, ${data.origin.address.state}`
+                        : ""
+                    } ${data.origin.address.zip || ""}`
+                  : "—"}
+              </div>
+
+              <div>
+                <span className="font-medium text-gray-800">
+                  Origin Location:
+                </span>{" "}
+                {data?.origin?.location
+                  ? formatLocation(data.origin.location)
+                  : data?.originWarehouse
+                  ? data.originWarehouse
+                  : "—"}
+              </div>
+            </div>
+          </div>
+
+          {/* Dates & Contact Card */}
+          <div className="bg-white rounded p-3 border">
+            <h3 className="text-sm font-semibold text-gray-700 mb-2">
+              Dates & Contact
+            </h3>
+
+            <div className="text-sm text-gray-600 space-y-1">
+              <div>
+                <span className="font-medium text-gray-800">Shipped:</span>{" "}
+                {data?.shipmentDate ? formatTime(data.shipmentDate) : "—"}
+              </div>
+              <div>
+                <span className="font-medium text-gray-800">Expected:</span>{" "}
+                {data?.destination?.expectedDeliveryDate ||
+                data?.expectedDeliveryDate
+                  ? formatTime(
+                      data.destination?.expectedDeliveryDate ||
+                        data.expectedDeliveryDate
+                    )
+                  : "—"}
+              </div>
+              <div>
+                <span className="font-medium text-gray-800">Last updated:</span>{" "}
+                {data?.lastUpdated ? formatTime(data.lastUpdated) : "—"}
+              </div>
+              <div className="mt-2 text-xs text-gray-500">
                 <div>
-                  <span className="font-medium text-gray-800">Name:</span>{" "}
-                  {data?.customerName || "—"}
+                  <span className="font-medium">Contact:</span>{" "}
+                  {data?.contactEmail ||
+                    data?.destination?.receiverEmail ||
+                    "—"}
                 </div>
-                <div>
-                  <span className="font-medium text-gray-800">Address:</span>{" "}
-                  {data?.address?.full
-                    ? `${data.address.full}, ${data.address.city}, ${data.address.state} ${data.address.zip}`
-                    : "—"}
-                </div>
-                <div>
-                  <span className="font-medium text-gray-800">
-                    Destination:
-                  </span>{" "}
-                  {data?.route?.slice(-1)[0]?.city || "—"}
-                </div>
-                <div>
-                  <span className="font-medium text-gray-800">Origin:</span>{" "}
-                  {data?.originWarehouse || "—"}
-                </div>
+                {data?.contactPhone && (
+                  <div>
+                    <span className="font-medium">Phone:</span>{" "}
+                    {data.contactPhone}
+                  </div>
+                )}
               </div>
             </div>
           </div>

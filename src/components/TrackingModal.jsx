@@ -1,13 +1,18 @@
-// src/components/TrackingModal.jsx
 import React from "react";
 import ProgressBar from "./ProgressBar";
 
 export default function TrackingModal({ record, onClose }) {
   if (!record) return null;
-  const route = record.route || [];
-  const idx = record.currentIndex || 0;
+  const route = Array.isArray(record.route) ? record.route : [];
+  const idx = typeof record.currentIndex === "number" ? record.currentIndex : 0;
+
+  // prefer server progressPct
   const progress =
-    route.length > 1 ? Math.round((idx / (route.length - 1)) * 100) : 0;
+    typeof record.progressPct === "number" && !Number.isNaN(record.progressPct)
+      ? Math.max(0, Math.min(100, Math.round(record.progressPct)))
+      : route.length > 1
+      ? Math.round((idx / (route.length - 1)) * 100)
+      : 0;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
@@ -31,7 +36,11 @@ export default function TrackingModal({ record, onClose }) {
               Status: {record.status}
             </div>
             <div className="mt-3">
-              <ProgressBar progress={progress} />
+              <ProgressBar
+                progress={progress}
+                status={record.status}
+                showLabel
+              />
               <div className="text-xs text-gray-500 mt-1">
                 {progress}% — Checkpoint {Math.min(idx + 1, route.length)} of{" "}
                 {route.length}
@@ -52,7 +61,7 @@ export default function TrackingModal({ record, onClose }) {
                     {h.city || "Update"} {h.note ? `— ${h.note}` : ""}
                   </div>
                   <div className="text-gray-400">
-                    {new Date(h.timestamp).toLocaleString()}
+                    {h.timestamp ? new Date(h.timestamp).toLocaleString() : "—"}
                   </div>
                 </li>
               ))}

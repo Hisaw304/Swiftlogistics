@@ -1,100 +1,74 @@
-// /api/admin/records/index.js
+// pages/api/admin/records/index.js
+import { v4 as uuidv4 } from "uuid";
 import { connectToDatabase } from "../../shared/mongo.js";
-import { randomUUID } from "crypto";
-import { generateRoute } from "../../shared/routeGenerator.js";
 
 const ADMIN = (req) => {
-  const key = req.headers["x-admin-key"] || req.query.adminKey;
+  const key = req.headers["x-admin-key"] || req.query?.adminKey;
   return key && key === process.env.ADMIN_KEY;
 };
 
 export default async function handler(req, res) {
-  // === CORS setup ===
   const CORS_HEADERS = {
     "Access-Control-Allow-Origin": "https://swiftlogistics-mu.vercel.app",
     "Access-Control-Allow-Methods": "GET,POST,PATCH,DELETE,OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type,x-admin-key",
   };
-
-  // Respond to preflight
-  if (req.method === "OPTIONS") {
-    Object.entries(CORS_HEADERS).forEach(([k, v]) => res.setHeader(k, v));
-    return res.status(204).end();
-  }
-
-  // Apply headers to all other responses
-  // Apply headers to all other responses
   Object.entries(CORS_HEADERS).forEach(([k, v]) => res.setHeader(k, v));
   res.setHeader("Content-Type", "application/json");
-  // prevent caching of admin API responses
-  res.setHeader("Cache-Control", "no-store, max-age=0, must-revalidate");
-  res.setHeader("Pragma", "no-cache");
 
-  // === Auth check ===
+  if (req.method === "OPTIONS") return res.status(204).end();
   if (!ADMIN(req)) return res.status(401).json({ error: "Unauthorized" });
+  if (req.method !== "POST")
+    return res.status(405).json({ error: "Method not allowed" });
 
-  const { db } = await connectToDatabase();
-  const col = db.collection("trackings");
-
-  if (req.method === "GET") {
-    const page = parseInt(req.query.page || "1", 10);
-    const limit = parseInt(req.query.limit || "100", 10);
-    const skip = (page - 1) * limit;
-
-    const cursor = col.find({}).sort({ createdAt: -1 }).skip(skip).limit(limit);
-    const items = await cursor.toArray();
-    const total = await col.countDocuments();
-
-    return res.json({ items, total, page, limit });
+  let body = {};
+  try {
+    body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+  } catch (e) {
+    return res.status(400).json({ error: "Invalid JSON body" });
   }
 
-  if (req.method === "POST") {
-    const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
-    const now = new Date().toISOString();
-    const trackingId = body.trackingId || randomUUID();
+  const now = new Date().toISOString();
+  const trackingId = body.trackingId || uuidv4();
 
-    const doc = {
-      trackingId,
-      customerName: body.customerName?.trim() || "Unknown Recipient",
-      address: {
-        full:
-          (typeof body.address === "object"
-            ? body.address.full?.trim()
-            : body.addressFull?.trim() || body.address?.trim()) ||
-          "Unknown Address",
-        city:
-          body.city?.trim() ||
-          (typeof body.address === "object" ? body.address.city?.trim() : "") ||
-          "Unknown City",
-        state:
-          body.state?.trim() ||
-          (typeof body.address === "object"
-            ? body.address.state?.trim()
-            : "") ||
-          "Texas",
-        zip:
-          body.zip?.trim() ||
-          (typeof body.address === "object" ? body.address.zip?.trim() : "") ||
-          "",
-      },
-      product: body.product?.trim() || "Unknown Product",
-      quantity: body.quantity ?? 1,
-      imageUrl: body.imageUrl || null,
-      status: body.initialStatus || "Pending",
-      originWarehouse: body.originWarehouse?.trim() || "Los Angeles, CA",
-      route: generateRoute(
-        body.originWarehouse || "Los Angeles, CA",
-        body.destination || "Austin, TX"
-      ),
-      currentIndex: 0,
-      locationHistory: [],
-      createdAt: now,
-      lastUpdated: now,
-    };
+  const doc = {
+    trackingId,
+    serviceType: body.serviceType || "standard",
+    shipmentDetails: body.shipmentDetails || "",
+    productDescription: body.productDescription || body.product || "",
+    quantity: body.quantity ?? 1,
+    weightKg: body.weightKg ?? null,
+    description: body.description || "",
+    origin: body.origin || null,
+    destination: body.destination || null,
+    shipmentDate: body.shipmentDate
+      ? new Date(body.shipmentDate).toISOString()
+      : null,
+    expectedDeliveryDate: body.expectedDeliveryDate
+      ? new Date(body.expectedDeliveryDate).toISOString()
+      : body.destination?.expectedDeliveryDate || null,
+    status: body.status || "Pending",
+    route: body.route || [],
+    currentIndex: 0,
+    currentLocation:
+      (body.origin && body.origin.location) ||
+      (body.route && body.route[0] && body.route[0].location) ||
+      null,
+    progressPct: 0,
+    locationHistory: [],
+    createdAt: now,
+    updatedAt: now,
+    lastUpdated: now,
+  };
 
-    await col.insertOne(doc);
+  try {
+    const { db } = await connectToDatabase();
+    await db.collection("trackings").insertOne(doc);
     return res.status(201).json(doc);
+  } catch (err) {
+    console.error("Create record error:", String(err));
+    return res
+      .status(500)
+      .json({ error: "create failed", detail: String(err) });
   }
-
-  return res.status(405).json({ error: "Method not allowed" });
 }
