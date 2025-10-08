@@ -1,4 +1,3 @@
-// src/components/AdminForm.jsx
 import React, { useState, useEffect } from "react";
 import ImageUploader from "./ImageUploader";
 
@@ -109,7 +108,14 @@ export default function AdminForm({
   );
 
   const [status, setStatus] = useState(initial?.status || "Pending");
-  const [imageUrl, setImageUrl] = useState(initial?.imageUrl || null);
+  // Be resilient to different legacy image field names
+  const [imageUrl, setImageUrl] = useState(
+    initial?.imageUrl ||
+      initial?.image ||
+      initial?.photo ||
+      initial?.image_url ||
+      null
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
@@ -162,7 +168,14 @@ export default function AdminForm({
           : destExpectedDeliveryDate || ""
       );
       setStatus(initial.status || "Pending");
-      setImageUrl(initial.imageUrl || null);
+      // support legacy keys for image (image, imageUrl, photo, image_url)
+      setImageUrl(
+        initial.imageUrl ||
+          initial.image ||
+          initial.photo ||
+          initial.image_url ||
+          null
+      );
     }
   }, [initial]);
 
@@ -279,7 +292,11 @@ export default function AdminForm({
           expectedDeliveryDate
         ).toISOString();
       if (status) payload.status = status;
-      if (imageUrl) payload.imageUrl = imageUrl;
+      // include image under both keys so server/back-compat handles it
+      if (imageUrl) {
+        payload.imageUrl = imageUrl;
+        payload.image = imageUrl;
+      }
 
       // Call parent handlers
       if (mode === "create") {

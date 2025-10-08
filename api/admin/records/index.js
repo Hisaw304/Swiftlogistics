@@ -1,5 +1,4 @@
 // pages/api/admin/records/index.js
-// pages/api/admin/records/index.js
 import { connectToDatabase } from "../../shared/mongo.js";
 import { randomUUID } from "crypto";
 import { generateRoute } from "../../shared/routeGenerator.js";
@@ -292,6 +291,10 @@ export default async function handler(req, res) {
         ? body.locationHistory
         : [],
 
+      // image fields (NEW: persist image on create)
+      imageUrl: safeStr(body.imageUrl) || safeStr(body.image) || null,
+      image: safeStr(body.image) || safeStr(body.imageUrl) || null,
+
       // metadata
       createdAt: now,
       updatedAt: now,
@@ -309,6 +312,7 @@ export default async function handler(req, res) {
         .json({ error: "create failed", detail: String(err) });
     }
   }
+
   if (req.method === "PATCH") {
     let body = {};
     try {
@@ -335,14 +339,105 @@ export default async function handler(req, res) {
     }
 
     try {
+      // Fetch existing doc to recompute derived fields reliably
+      const existing = await col.findOne(query);
+      if (!existing) {
+        return res.status(404).json({ error: "Record not found" });
+      }
+
+      // Prepare updates object safely
+      const updatesObj = typeof updates === "object" && updates ? updates : {};
+
+      // Merge route/currentIndex/status from updates or existing for recompute
+      const route = Array.isArray(updatesObj.route)
+        ? updatesObj.route
+        : Array.isArray(existing.route)
+        ? existing.route
+        : [];
+
+      let currentIndex = Number.isFinite(Number(updatesObj.currentIndex))
+        ? Number(updatesObj.currentIndex)
+        : Number.isFinite(Number(existing.currentIndex))
+        ? Number(existing.currentIndex)
+        : 0;
+      currentIndex = Math.max(0, currentIndex);
+
+      const totalStops = Array.isArray(route) ? route.length : 0;
+      let progressPct =
+        totalStops > 1
+          ? Math.round((currentIndex / (totalStops - 1)) * 100)
+          : 0;
+
+      // Status handling: prefer updated status, then existing
+      const statusRaw =
+        (updatesObj.status && String(updatesObj.status)) ||
+        existing.status ||
+        "Pending";
+      const status = String(statusRaw).trim();
+
+      // Shipment date handling
+      const toIso = (d) => {
+        if (!d) return null;
+        try {
+          const dd = new Date(d);
+          if (isNaN(dd.getTime())) return null;
+          return dd.toISOString();
+        } catch {
+          return null;
+        }
+      };
+      const shipmentDateIso = updatesObj.shipmentDate
+        ? toIso(updatesObj.shipmentDate)
+        : existing.shipmentDate || null;
+
+      // If status becomes "Shipped" and no shipmentDate, set to now
+      const computedShipmentDate =
+        status.toLowerCase() === "shipped"
+          ? shipmentDateIso || now.toISOString()
+          : shipmentDateIso;
+
+      // If delivered — set progress to 100 and currentIndex to last
+      if (status.toLowerCase() === "delivered") {
+        if (Array.isArray(route) && route.length > 0) {
+          currentIndex = Math.max(0, route.length - 1);
+        }
+        progressPct = 100;
+      } else {
+        // recompute progress normally if not delivered
+        if (totalStops > 1) {
+          progressPct = Math.round((currentIndex / (totalStops - 1)) * 100);
+        } else {
+          progressPct = progressPct ?? 0;
+        }
+      }
+
+      // compute currentLocation: prefer updates, fall back to route/current/origin in existing doc
+      const currentLocation =
+        updatesObj.currentLocation &&
+        updatesObj.currentLocation.type === "Point"
+          ? updatesObj.currentLocation
+          : route && route[currentIndex] && route[currentIndex].location
+          ? route[currentIndex].location
+          : existing.origin && existing.origin.location
+          ? existing.origin.location
+          : null;
+
+      // Build final $set updates: include derived fields
+      const finalUpdates = {
+        ...(updatesObj || {}),
+        currentIndex,
+        currentLocation,
+        progressPct,
+        status,
+        shipmentDate: computedShipmentDate || null,
+        updatedAt: now,
+        lastUpdated: now,
+      };
+
       const result = await col.findOneAndUpdate(
         query,
         {
-          $set: {
-            ...(typeof updates === "object" ? updates : {}),
-            updatedAt: now,
-            lastUpdated: now,
-          },
+          $set: finalUpdates,
         },
         { returnDocument: "after" }
       );
