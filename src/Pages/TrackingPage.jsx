@@ -51,6 +51,8 @@ export default function TrackingPage() {
   const [loading, setLoading] = useState(Boolean(id));
   const [error, setError] = useState(null);
   const [imgError, setImgError] = useState(false);
+  const [prevLocation, setPrevLocation] = useState(null); // previous location for animation
+  const POLL_INTERVAL_MS = 10000; // 10s polling (tune as needed)
 
   // small fetch helper with timeout
   async function fetchWithTimeout(url, options = {}, timeout = 12000) {
@@ -75,18 +77,18 @@ export default function TrackingPage() {
     }
 
     let alive = true;
-    setLoading(true);
-    setError(null);
+    let intervalId = null;
 
-    (async () => {
+    async function doFetch() {
       try {
+        if (alive) setLoading(true);
+        setError(null);
         const res = await fetchWithTimeout(
           `/api/public/track?trackingId=${encodeURIComponent(id)}`,
           { headers: { Accept: "application/json" } },
           12000
         );
         if (!res.ok) {
-          // try to parse JSON error message, otherwise throw status
           const txt = await res.text().catch(() => "");
           let parsed = null;
           try {
@@ -97,21 +99,62 @@ export default function TrackingPage() {
           throw new Error(parsed?.error || `HTTP ${res.status}`);
         }
         const json = await res.json();
+
         if (!alive) return;
+
+        // If we already have a data.currentLocation and the new payload has a different currentLocation,
+        // move the previous to prevLocation so map can animate smoothly.
+        try {
+          const oldLoc = data?.currentLocation || null;
+          const newLoc = json?.currentLocation || null;
+
+          // helper to compare basic coordinates (works for GeoJSON Point or [lng,lat] arrays)
+          const coordsOf = (c) => {
+            if (!c) return null;
+            if (Array.isArray(c) && c.length >= 2)
+              return [Number(c[1]), Number(c[0])];
+            if (c.type === "Point" && Array.isArray(c.coordinates))
+              return [Number(c.coordinates[1]), Number(c.coordinates[0])];
+            if (typeof c.lat === "number" && typeof c.lng === "number")
+              return [Number(c.lat), Number(c.lng)];
+            return null;
+          };
+
+          const oc = coordsOf(oldLoc);
+          const nc = coordsOf(newLoc);
+          if (oc && nc && (oc[0] !== nc[0] || oc[1] !== nc[1])) {
+            setPrevLocation(oldLoc);
+          } else if (!oc && nc) {
+            // initial load — prev stays null
+            setPrevLocation(null);
+          }
+        } catch (e) {
+          // ignore compare errors
+        }
+
         setData(json || null);
       } catch (err) {
-        if (err.name === "AbortError") return; // ignore aborts
+        if (err.name === "AbortError") return;
+        // On network / transient error we keep showing last data but surface a message
         setError(err.message || "Failed to load tracking data.");
-        setData(null);
       } finally {
         if (alive) setLoading(false);
       }
-    })();
+    }
+
+    // initial fetch
+    doFetch();
+
+    // polling
+    intervalId = setInterval(() => {
+      doFetch();
+    }, POLL_INTERVAL_MS);
 
     return () => {
       alive = false;
+      if (intervalId) clearInterval(intervalId);
     };
-  }, [id]);
+  }, [id]); // intentionally only re-run when id changes
 
   // defensive data access
   const route = Array.isArray(data?.route) ? data.route : [];
@@ -172,6 +215,23 @@ export default function TrackingPage() {
     } catch {
       return "—";
     }
+  };
+  const normalizePoint = (loc) => {
+    if (!loc) return null;
+    if (Array.isArray(loc) && loc.length >= 2) {
+      // assume [lng, lat]
+      return { lat: Number(loc[1]), lng: Number(loc[0]) };
+    }
+    if (loc.type === "Point" && Array.isArray(loc.coordinates)) {
+      return {
+        lat: Number(loc.coordinates[1]),
+        lng: Number(loc.coordinates[0]),
+      };
+    }
+    if (typeof loc.lat === "number" && typeof loc.lng === "number") {
+      return { lat: Number(loc.lat), lng: Number(loc.lng) };
+    }
+    return null;
   };
 
   // small UI actions
@@ -507,6 +567,7 @@ export default function TrackingPage() {
                     route={route}
                     currentIndex={currentIndex}
                     currentLocation={data?.currentLocation}
+                    prevLocation={prevLocation}
                     height={420}
                   />
                 </>

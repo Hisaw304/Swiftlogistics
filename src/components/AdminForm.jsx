@@ -368,11 +368,13 @@ export default function AdminForm({
           expectedDeliveryDate
         ).toISOString();
       if (status) payload.status = status;
+
       // include image under both keys so server/back-compat handles it
       if (imageUrl) {
         payload.imageUrl = imageUrl;
         payload.image = imageUrl;
       }
+
       // --- compute derived fields from current form state BEFORE sending to server ---
       const derived = computeDerived({
         route,
@@ -396,17 +398,49 @@ export default function AdminForm({
         payload.currentLocation = derived.currentLocation;
       if (derived.shipmentDate) payload.shipmentDate = derived.shipmentDate;
 
-      // Call parent handlers
+      // help server pick origin/destination labels (optional but useful)
+      if (originCity) payload.originWarehouse = originCity;
+      if (destCity) payload.destinationCity = destCity;
+
+      // Call parent handlers and adopt server-returned route/derived fields
       if (mode === "create") {
-        await onCreate(payload);
+        // Parent should return the created document
+        const created = await onCreate(payload);
+        // If server returned route / derived values, adopt them into form state
+        if (created) {
+          if (Array.isArray(created.route)) setRoute(created.route);
+          if (typeof created.currentIndex === "number")
+            setCurrentIndex(created.currentIndex);
+          if (typeof created.progressPct === "number")
+            setProgressPct(created.progressPct);
+          if (created.currentLocation)
+            setCurrentLocation(created.currentLocation);
+          if (created.shipmentDate)
+            setShipmentDate(created.shipmentDate.slice(0, 10));
+        }
       } else if (mode === "edit" && onUpdate && initial) {
         const idToSend = safeIdFromInitial(initial);
         if (!idToSend)
           throw new Error(
             "Missing record id: trackingId or _id required for update"
           );
+
         console.log("AdminForm: update call:", { idToSend, payload });
-        await onUpdate(idToSend, payload);
+
+        // Parent should return the updated document
+        const updated = await onUpdate(idToSend, payload);
+
+        if (updated) {
+          if (Array.isArray(updated.route)) setRoute(updated.route);
+          if (typeof updated.currentIndex === "number")
+            setCurrentIndex(updated.currentIndex);
+          if (typeof updated.progressPct === "number")
+            setProgressPct(updated.progressPct);
+          if (updated.currentLocation)
+            setCurrentLocation(updated.currentLocation);
+          if (updated.shipmentDate)
+            setShipmentDate(updated.shipmentDate.slice(0, 10));
+        }
       }
     } catch (err) {
       console.error("❌ Save failed (AdminForm):", err);

@@ -1,6 +1,6 @@
 import { connectToDatabase } from "../../shared/mongo.js";
 import { randomUUID } from "crypto";
-import { generateRoute } from "../../shared/routeGenerator.js";
+import { generateRoute } from "./routeGenerator.js";
 import { ObjectId } from "mongodb"; // ✅ Add this line
 
 const ADMIN = (req) => {
@@ -187,7 +187,19 @@ export default async function handler(req, res) {
 
     if (!route) {
       try {
-        route = generateRoute(originLabel, destLabel);
+        // generateRoute now expects full origin/destination objects
+        route = await generateRoute(
+          {
+            lat: origin?.location?.coordinates?.[1],
+            lng: origin?.location?.coordinates?.[0],
+            city: origin?.address?.city || originLabel,
+          },
+          {
+            lat: destination?.location?.coordinates?.[1],
+            lng: destination?.location?.coordinates?.[0],
+            city: destination?.address?.city || destLabel,
+          }
+        );
       } catch (e) {
         console.warn("route generation failed:", String(e));
         route = [];
