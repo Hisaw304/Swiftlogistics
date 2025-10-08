@@ -373,6 +373,28 @@ export default function AdminForm({
         payload.imageUrl = imageUrl;
         payload.image = imageUrl;
       }
+      // --- compute derived fields from current form state BEFORE sending to server ---
+      const derived = computeDerived({
+        route,
+        currentIndex,
+        status,
+        // shipmentDate is a local YYYY-MM-DD string; convert to ISO for computeDerived
+        shipmentDate: shipmentDate
+          ? new Date(shipmentDate).toISOString()
+          : null,
+        // prefer the origin we just built into payload (if any), otherwise fall back to initial
+        origin: payload.origin || initial?.origin || null,
+      });
+
+      // include route if present
+      if (Array.isArray(route) && route.length) payload.route = route;
+
+      // attach derived values so server persists them
+      payload.currentIndex = derived.currentIndex;
+      payload.progressPct = derived.progressPct;
+      if (derived.currentLocation)
+        payload.currentLocation = derived.currentLocation;
+      if (derived.shipmentDate) payload.shipmentDate = derived.shipmentDate;
 
       // Call parent handlers
       if (mode === "create") {

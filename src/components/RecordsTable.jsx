@@ -113,6 +113,7 @@ export default function RecordsTable({
                 </td>
                 <td className="px-3 py-2 align-top space-x-2">
                   <button
+                    type="button"
                     className="px-2 py-1 bg-blue-600 text-white text-xs rounded disabled:opacity-50"
                     onClick={() => onNext && onNext(idString)}
                     disabled={atFinal}
@@ -125,12 +126,14 @@ export default function RecordsTable({
                     Next Stop
                   </button>
                   <button
+                    type="button"
                     className="px-2 py-1 bg-gray-100 text-xs rounded"
                     onClick={() => onEdit && onEdit(r)}
                   >
                     Edit
                   </button>
                   <button
+                    type="button"
                     className="px-2 py-1 bg-red-100 text-red-700 text-xs rounded"
                     onClick={() => onDelete && onDelete(idString)}
                   >
