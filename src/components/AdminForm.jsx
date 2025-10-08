@@ -90,7 +90,7 @@ export default function AdminForm({
           if (payload[key] !== undefined) updatePayload[key] = payload[key];
         }
 
-        await onUpdate(initial._id || initial.trackingId, updatePayload);
+        await onUpdate(initial.trackingId, updatePayload);
       }
     } catch (err) {
       console.error("❌ Save failed:", err);
