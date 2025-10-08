@@ -1,7 +1,9 @@
 // pages/api/admin/records/index.js
+// pages/api/admin/records/index.js
 import { connectToDatabase } from "../../shared/mongo.js";
 import { randomUUID } from "crypto";
 import { generateRoute } from "../../shared/routeGenerator.js";
+import { ObjectId } from "mongodb"; // ✅ Add this line
 
 const ADMIN = (req) => {
   const key = req.headers["x-admin-key"] || req.query?.adminKey;
@@ -308,7 +310,15 @@ export default async function handler(req, res) {
     }
   }
   if (req.method === "PATCH") {
-    const { trackingId, updates } = req.body;
+    let body = {};
+    try {
+      body =
+        typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
+    } catch {
+      return res.status(400).json({ error: "Invalid JSON body" });
+    }
+
+    const { trackingId, updates } = body;
 
     if (!trackingId) {
       return res.status(400).json({ error: "trackingId required" });
@@ -316,31 +326,41 @@ export default async function handler(req, res) {
 
     const now = new Date();
 
-    const result = await col.findOneAndUpdate(
-      {
-        $or: [
-          { trackingId },
-          { _id: new ObjectId(trackingId) }, // allows either ID form
-        ],
-      },
-      {
-        $set: {
-          ...(typeof updates === "object" ? updates : {}),
-          updatedAt: now,
-          lastUpdated: now,
-        },
-      },
-      { returnDocument: "after" }
-    );
-
-    if (!result.value) {
-      return res.status(404).json({ error: "Record not found" });
+    // build a safe query for either trackingId or _id
+    let query = { $or: [{ trackingId }] };
+    try {
+      query.$or.push({ _id: new ObjectId(trackingId) });
+    } catch {
+      // ignore invalid ObjectId
     }
 
-    return res.status(200).json({
-      message: "Record updated successfully",
-      updatedRecord: result.value,
-    });
+    try {
+      const result = await col.findOneAndUpdate(
+        query,
+        {
+          $set: {
+            ...(typeof updates === "object" ? updates : {}),
+            updatedAt: now,
+            lastUpdated: now,
+          },
+        },
+        { returnDocument: "after" }
+      );
+
+      if (!result.value) {
+        return res.status(404).json({ error: "Record not found" });
+      }
+
+      return res.status(200).json({
+        message: "Record updated successfully",
+        updatedRecord: result.value,
+      });
+    } catch (err) {
+      console.error("PATCH error:", err);
+      return res
+        .status(500)
+        .json({ error: "Update failed", detail: String(err) });
+    }
   }
 
   // fallback for other methods
