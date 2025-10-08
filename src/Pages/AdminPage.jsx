@@ -328,25 +328,42 @@ export default function AdminPage() {
       )}
 
       {editing && (
-        <div className="fixed inset-0 flex items-center justify-center z-50 bg-black/40">
-          <div className="w-full max-w-2xl bg-white p-4 rounded-lg shadow">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-gray-700">
-                Edit Record — {editing.trackingId ?? normalizeId(editing._id)}
-              </h3>
-              <button
-                className="text-sm text-gray-600"
-                onClick={() => setEditing(null)}
-              >
-                ✕ Close
-              </button>
+        <div
+          className="fixed inset-0 z-50 bg-black/40 overflow-auto"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setEditing(null)}
+        >
+          {/* container aligns to start so modal sits lower and can expand; add padding-top */}
+          <div
+            className="min-h-screen flex items-start justify-center pt-10 px-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              className="w-full max-w-2xl bg-white rounded-lg shadow p-4"
+              style={{ maxHeight: "85vh", overflow: "auto" }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold text-gray-700">
+                  Edit Record — {editing.trackingId ?? normalizeId(editing._id)}
+                </h3>
+                <button
+                  className="text-sm text-gray-600"
+                  onClick={() => setEditing(null)}
+                  aria-label="Close edit modal"
+                >
+                  ✕ Close
+                </button>
+              </div>
+
+              <AdminForm
+                mode="edit"
+                initial={editing}
+                onUpdate={handleUpdate}
+                onCancel={() => setEditing(null)}
+              />
             </div>
-            <AdminForm
-              mode="edit"
-              initial={editing}
-              onUpdate={handleUpdate}
-              onCancel={() => setEditing(null)}
-            />
           </div>
         </div>
       )}
