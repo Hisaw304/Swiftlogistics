@@ -159,108 +159,41 @@ export default async function handler(req, res) {
     );
     return res.json(updateResult.value);
   }
-
-  // === DEBUG DELETE branch — temporary ===
+  // === DELETE === (production)
   if (req.method === "DELETE") {
+    console.log("🗑 DELETE request. id:", id);
+
+    // If id is still missing, return error (avoid accidental empty filters)
+    if (!id) {
+      console.error("❌ DELETE: missing id in request");
+      return res
+        .status(400)
+        .json({ error: "Missing id in request path or query" });
+    }
+
+    // Build $or filter to match either ObjectId or trackingId
+    const orClauses = [{ trackingId: id }];
     try {
-      console.log("🗑 DEBUG DELETE invoked. raw id:", id);
+      if (ObjectId.isValid(id)) orClauses.unshift({ _id: new ObjectId(id) });
+    } catch (e) {
+      console.warn("ObjectId construction failed:", e);
+    }
 
-      // basic DB / collection introspection
-      const adminInfo = {
-        dbName: db.databaseName || null,
-        // try to get a collection count (catch errors)
-        collection: "trackings",
-      };
-      let colCount = null;
-      try {
-        colCount = await col.countDocuments();
-      } catch (e) {
-        console.error("Could not count documents:", String(e));
-      }
-      console.log(
-        "DEBUG db name:",
-        adminInfo.dbName,
-        "collection:",
-        adminInfo.collection,
-        "count:",
-        colCount
-      );
+    console.log("➡️ delete $or filter:", orClauses);
 
-      // build the candidate filters
-      const filters = [];
-      try {
-        if (ObjectId.isValid(id)) {
-          filters.push({ _id: new ObjectId(id) });
-        }
-      } catch (e) {
-        console.warn("ObjectId construction warning:", String(e));
-      }
-      filters.push({ trackingId: id });
-
-      console.log("DEBUG filters:", JSON.stringify(filters));
-
-      // run findOne for each filter and capture sample doc if found
-      const founds = [];
-      for (const f of filters) {
-        try {
-          const doc = await col.findOne(f);
-          founds.push({
-            filter: f,
-            found: !!doc,
-            sample: doc
-              ? {
-                  _id: doc._id?.toString?.() || String(doc._id),
-                  trackingId: doc.trackingId || null,
-                }
-              : null,
-          });
-          console.log(
-            "DEBUG findOne ->",
-            JSON.stringify(f),
-            "found:",
-            !!doc,
-            "sample:",
-            doc ? doc._id?.toString?.() || doc.trackingId : null
-          );
-        } catch (err) {
-          console.error(
-            "DEBUG findOne error for filter",
-            JSON.stringify(f),
-            String(err)
-          );
-          founds.push({ filter: f, error: String(err) });
-        }
-      }
-
-      // Do a single $or delete (same as production plan) and capture result
-      const orFilter = filters.length === 1 ? filters[0] : { $or: filters };
-      console.log("DEBUG performing deleteOne with:", JSON.stringify(orFilter));
-      let delResult = { deletedCount: 0 };
-      try {
-        delResult = await col.deleteOne(orFilter);
-        console.log("DEBUG deleteOne result:", JSON.stringify(delResult));
-      } catch (err) {
-        console.error("DEBUG deleteOne error:", String(err));
-      }
-
-      // Return a rich JSON payload so we don't have to read logs
+    try {
+      const delResult = await col.deleteOne({ $or: orClauses });
+      console.log("🟢 deleteOne result:", JSON.stringify(delResult));
       return res.json({
         ok: true,
-        debug: {
-          dbName: adminInfo.dbName,
-          collection: adminInfo.collection,
-          collectionCount: colCount,
-          rawId: id,
-          triedFilters: filters,
-          founds,
-          deleteResult: delResult,
-        },
+        deletedCount: delResult.deletedCount || 0,
+        triedFilters: orClauses,
       });
-    } catch (outer) {
-      console.error("DEBUG DELETE outer error:", String(outer));
+    } catch (err) {
+      console.error("❌ deleteOne error:", String(err));
       return res
         .status(500)
-        .json({ error: "Debug delete failed", detail: String(outer) });
+        .json({ error: "delete failed", detail: String(err) });
     }
   }
 
