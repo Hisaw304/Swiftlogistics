@@ -41,22 +41,23 @@ export default function AdminPage() {
     setAdminKey(key);
   }
 
+  // AdminPage: replace existing loadRecords() with this
   async function loadRecords() {
     setLoading(true);
     setError(null);
     try {
-      // use direct fetch so we can include the admin key header reliably
       const q = `?limit=200`;
       const res = await fetch(`/api/admin/records${q}`, {
         method: "GET",
         headers: {
           "x-admin-key": adminKey || "",
           "Content-Type": "application/json",
+          "Cache-Control": "no-cache",
         },
+        cache: "no-store", // IMPORTANT: forces a fresh network request (bypasses 304)
       });
 
       if (!res.ok) {
-        // read server error if possible
         let body = null;
         try {
           body = await res.json();
@@ -107,44 +108,76 @@ export default function AdminPage() {
   async function deleteRecordById(id) {
     if (!confirm("Delete this record?")) return;
 
+    // normalize id to a string (handles ObjectId objects)
     const idStr = id && id.toString ? id.toString() : String(id);
 
+    if (!adminKey) {
+      alert("Missing admin key");
+      return;
+    }
+
     try {
+      console.log("Deleting id:", idStr, "adminKey present:", !!adminKey);
       const res = await fetch(
         `/api/admin/records/${encodeURIComponent(idStr)}`,
         {
           method: "DELETE",
           headers: { "x-admin-key": adminKey },
+          // ensure a fresh network request for the delete (not strictly necessary for DELETE,
+          // but keeps cache behavior explicit)
+          cache: "no-store",
         }
       );
 
-      if (!res.ok) {
-        // try to show server error
-        let body = null;
-        try {
-          body = await res.json();
-        } catch (e) {
-          body = await res.text().catch(() => null);
-        }
-        throw new Error(body?.error || body || `HTTP ${res.status}`);
+      // try to parse JSON body (server should return { ok: true, deletedCount })
+      let body = null;
+      try {
+        body = await res.json();
+      } catch (e) {
+        body = null;
       }
 
-      // only remove from UI after success
-      setRecords((s) =>
-        s.filter(
-          (rr) =>
-            (rr._id && rr._id.toString ? rr._id.toString() : String(rr._id)) !==
-              idStr && rr.trackingId !== idStr
-        )
-      );
+      if (!res.ok) {
+        const err =
+          (body && (body.error || JSON.stringify(body))) ||
+          `HTTP ${res.status}`;
+        throw new Error(err);
+      }
 
-      // If you're using a cache/revalidate layer (SWR/react-query), revalidate here:
-      // mutate('/api/admin/records'); // uncomment if using SWR
+      // If server provides deletedCount, ensure something was deleted
+      if (
+        body &&
+        typeof body.deletedCount !== "undefined" &&
+        body.deletedCount === 0
+      ) {
+        throw new Error("Server did not delete any document (deletedCount 0).");
+      }
+
+      // Re-fetch authoritative list from server to avoid cached 304 results
+      try {
+        await loadRecords();
+        return;
+      } catch (e) {
+        console.warn(
+          "loadRecords failed after delete, falling back to local removal:",
+          e
+        );
+        // fallback: remove locally if loadRecords failed
+        setRecords((s) =>
+          s.filter(
+            (rr) =>
+              (rr._id && rr._id.toString
+                ? rr._id.toString()
+                : String(rr._id)) !== idStr && rr.trackingId !== idStr
+          )
+        );
+        return;
+      }
     } catch (err) {
       console.error("Delete failed:", err);
       alert("Delete failed: " + (err.message || "unknown"));
-      // optional: re-fetch records to resync UI
-      // await refetchRecords();
+      // optional: ensure UI re-sync
+      // await loadRecords();
     }
   }
 

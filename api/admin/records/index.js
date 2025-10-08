@@ -23,8 +23,12 @@ export default async function handler(req, res) {
   }
 
   // Apply headers to all other responses
+  // Apply headers to all other responses
   Object.entries(CORS_HEADERS).forEach(([k, v]) => res.setHeader(k, v));
   res.setHeader("Content-Type", "application/json");
+  // prevent caching of admin API responses
+  res.setHeader("Cache-Control", "no-store, max-age=0, must-revalidate");
+  res.setHeader("Pragma", "no-cache");
 
   // === Auth check ===
   if (!ADMIN(req)) return res.status(401).json({ error: "Unauthorized" });

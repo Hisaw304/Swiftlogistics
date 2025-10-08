@@ -25,8 +25,12 @@ export default async function handler(req, res) {
   }
 
   // Apply headers
+  // Apply headers
   Object.entries(CORS_HEADERS).forEach(([k, v]) => res.setHeader(k, v));
   res.setHeader("Content-Type", "application/json");
+  // prevent caching of admin API responses
+  res.setHeader("Cache-Control", "no-store, max-age=0, must-revalidate");
+  res.setHeader("Pragma", "no-cache");
 
   // === Auth check ===
   if (!ADMIN(req)) {
@@ -102,8 +106,9 @@ export default async function handler(req, res) {
   if (req.method === "DELETE") {
     console.log("🗑 DELETE request received for:", filter);
     const delResult = await col.deleteOne(filter);
-    console.log("🟢 Delete result:", delResult);
-    return res.json({ ok: true });
+    console.log("🟢 Delete result:", JSON.stringify(delResult));
+    // return deletedCount so client can validate deletion
+    return res.json({ ok: true, deletedCount: delResult.deletedCount });
   }
 
   console.log("⚠️ Method not allowed:", req.method);
