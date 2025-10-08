@@ -153,7 +153,6 @@ export default function AdminPage() {
     setEditing(null);
     return updated;
   }
-
   async function deleteRecordById(id) {
     if (!confirm("Delete this record?")) return;
     const idStr = normalizeId(id);
@@ -162,21 +161,28 @@ export default function AdminPage() {
       return;
     }
 
-    try {
-      console.log("Deleting id:", idStr);
-      const res = await apiFetch(
-        `/api/admin/records/${encodeURIComponent(idStr)}`,
+    // helper to call delete and return parsed body
+    async function callDelete(idToDelete) {
+      const res = await fetch(
+        `/api/admin/records/${encodeURIComponent(idToDelete)}`,
         {
           method: "DELETE",
+          headers: { "x-admin-key": adminKey },
+          cache: "no-store",
         }
       );
-
       let body = null;
       try {
         body = await res.json();
       } catch (e) {
         body = null;
       }
+      return { res, body };
+    }
+
+    try {
+      console.log("Deleting id:", idStr);
+      const { res, body } = await callDelete(idStr);
 
       if (!res.ok) {
         throw new Error(
@@ -184,22 +190,51 @@ export default function AdminPage() {
         );
       }
 
-      // If server provides deletedCount, use it to confirm deletion
+      // If deletedCount reported 1 => success
       if (
         body &&
         typeof body.deletedCount !== "undefined" &&
-        body.deletedCount === 0
+        body.deletedCount > 0
       ) {
-        // no deletion; surface useful message and re-sync
-        console.warn(
-          "Server reported deletedCount 0, reloading list to re-sync."
-        );
-        await loadRecords();
-        throw new Error("Delete did not remove any document.");
+        await loadRecords(); // refresh list
+        return;
       }
 
-      // Success: re-fetch authoritative list
-      await loadRecords();
+      // deletedCount is 0 (or server didn't provide it). Try fallback id from current records:
+      console.warn("Server reported deletedCount 0, attempting fallback id...");
+
+      // Find the record in current records to get its alternate id
+      const found = records.find(
+        (r) => normalizeId(r._id) === idStr || r.trackingId === idStr
+      );
+      const altId = found
+        ? normalizeId(found._id) === idStr
+          ? found.trackingId
+          : normalizeId(found._id)
+        : null;
+
+      if (altId) {
+        console.log("Trying fallback delete id:", altId);
+        const { res: res2, body: body2 } = await callDelete(altId);
+        if (!res2.ok) {
+          throw new Error(
+            (body2 && (body2.error || JSON.stringify(body2))) ||
+              `HTTP ${res2.status}`
+          );
+        }
+        if (
+          body2 &&
+          typeof body2.deletedCount !== "undefined" &&
+          body2.deletedCount > 0
+        ) {
+          await loadRecords();
+          return;
+        }
+      }
+
+      // If we get here no deletion happened
+      await loadRecords(); // resync
+      throw new Error("Delete did not remove any document.");
     } catch (err) {
       console.error("Delete failed:", err);
       alert("Delete failed: " + (err.message || "unknown"));

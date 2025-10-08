@@ -79,9 +79,8 @@ export default async function handler(req, res) {
 
   // === PATCH ===
   if (req.method === "PATCH") {
-    console.log("✏️ PATCH request received...");
+    console.log("✏️ PATCH request received. raw id:", id);
     const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
-    console.log("📦 Body:", body);
 
     const allowed = [
       "customerName",
@@ -106,62 +105,56 @@ export default async function handler(req, res) {
     set.updatedAt = new Date().toISOString();
     set.lastUpdated = set.updatedAt;
 
-    // try filters in order, update the first match
-    const filters = buildFilters(id);
-    let updated = null;
-    for (const f of filters) {
-      const result = await col.updateOne(f, { $set: set });
-      console.log(
-        "🟢 Update result for filter",
-        f,
-        ":",
-        JSON.stringify(result)
-      );
-      if (result.matchedCount > 0) {
-        updated = await col.findOne(f);
-        break;
-      }
+    // build $or filter to match either _id (ObjectId) or trackingId
+    const orClauses = [{ trackingId: id }];
+    try {
+      if (ObjectId.isValid(id)) orClauses.unshift({ _id: new ObjectId(id) });
+    } catch (e) {
+      console.warn("ObjectId construction failed:", e);
     }
+    console.log("➡️ PATCH $or filter:", orClauses);
 
-    if (!updated) {
-      console.log("❌ No document matched for PATCH with id:", id);
+    const updateResult = await col.findOneAndUpdate(
+      { $or: orClauses },
+      { $set: set },
+      { returnDocument: "after" }
+    );
+
+    if (!updateResult.value) {
+      console.log("❌ PATCH: no document matched for id:", id);
       return res.status(404).json({ error: "Not found" });
     }
 
-    console.log("✅ Updated document:", updated?.trackingId || updated?._id);
-    return res.json(updated);
+    console.log(
+      "✅ PATCH updated:",
+      updateResult.value._id || updateResult.value.trackingId
+    );
+    return res.json(updateResult.value);
   }
 
   // === DELETE ===
+  // === DELETE ===
   if (req.method === "DELETE") {
     console.log("🗑 DELETE request received. raw id:", id);
-    const filters = buildFilters(id);
-    console.log("➡️ Attempting delete with filters:", filters);
 
-    let delResult = { deletedCount: 0 };
-    let usedFilter = null;
-
-    // Try each filter until one deletes
-    for (const f of filters) {
-      const result = await col.deleteOne(f);
-      console.log("🟢 deleteOne result for", f, ":", JSON.stringify(result));
-      if (result.deletedCount && result.deletedCount > 0) {
-        delResult = result;
-        usedFilter = f;
-        break;
-      }
+    const orClauses = [{ trackingId: id }];
+    try {
+      if (ObjectId.isValid(id)) orClauses.unshift({ _id: new ObjectId(id) });
+    } catch (e) {
+      console.warn("ObjectId construction failed:", e);
     }
+    console.log("➡️ delete $or filter:", orClauses);
 
+    const delResult = await col.deleteOne({ $or: orClauses });
     console.log(
-      "🟡 Final delete result:",
-      JSON.stringify(delResult),
-      "usedFilter:",
-      usedFilter
+      "🟢 deleteOne result (combined $or):",
+      JSON.stringify(delResult)
     );
+
     return res.json({
       ok: true,
       deletedCount: delResult.deletedCount || 0,
-      usedFilter,
+      triedFilters: orClauses,
     });
   }
 
