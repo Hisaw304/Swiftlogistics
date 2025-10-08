@@ -303,7 +303,7 @@ export default function AdminForm({
 
   return (
     <form onSubmit={submit} className="bg-white p-4 rounded shadow space-y-4">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4">
         {/* Shipment Details Card */}
         <div className="bg-gray-50 p-4 rounded border">
           <h3 className="font-semibold mb-2">Shipment Details</h3>
@@ -382,148 +382,151 @@ export default function AdminForm({
         </div>
 
         {/* Origin Card */}
-        <div className="bg-gray-50 p-4 rounded border">
-          <h3 className="font-semibold mb-2">Origin (Sender)</h3>
-          <div className="space-y-2">
-            <label className="block text-sm">
-              Sender name
-              <input
-                className="mt-1 p-2 w-full border rounded"
-                value={originName}
-                onChange={(e) => setOriginName(e.target.value)}
-              />
-            </label>
+        <div className="bg-gray-50 p-4 rounded-xl border shadow-sm space-y-3">
+          <h3 className="font-semibold text-lg mb-2">Origin (Sender)</h3>
 
-            <label className="block text-sm">
-              Street address
-              <input
-                className="mt-1 p-2 w-full border rounded"
-                value={originAddressFull}
-                onChange={(e) => setOriginAddressFull(e.target.value)}
-              />
-            </label>
+          <label className="block text-sm">
+            Sender name
+            <input
+              className="mt-1 p-2 w-full border rounded"
+              value={originName}
+              onChange={(e) => setOriginName(e.target.value)}
+              placeholder="John Doe"
+            />
+          </label>
 
-            <div className="flex gap-2">
-              <input
-                className="p-2 border rounded flex-1"
-                placeholder="City"
-                value={originCity}
-                onChange={(e) => setOriginCity(e.target.value)}
-              />
-              <input
-                className="p-2 border rounded w-28"
-                placeholder="State"
-                value={originState}
-                onChange={(e) => setOriginState(e.target.value)}
-              />
-              <input
-                className="p-2 border rounded w-28"
-                placeholder="ZIP"
-                value={originZip}
-                onChange={(e) => setOriginZip(e.target.value)}
-              />
-            </div>
+          <label className="block text-sm">
+            Street address
+            <input
+              className="mt-1 p-2 w-full border rounded"
+              value={originAddressFull}
+              onChange={(e) => setOriginAddressFull(e.target.value)}
+              placeholder="123 Main St"
+            />
+          </label>
 
-            <div className="flex gap-2">
-              <input
-                className="p-2 border rounded flex-1"
-                placeholder="Latitude"
-                value={originLat}
-                onChange={(e) => setOriginLat(e.target.value)}
-              />
-              <input
-                className="p-2 border rounded w-40"
-                placeholder="Longitude"
-                value={originLng}
-                onChange={(e) => setOriginLng(e.target.value)}
-              />
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <input
+              className="p-2 border rounded w-full"
+              placeholder="City"
+              value={originCity}
+              onChange={(e) => setOriginCity(e.target.value)}
+            />
+            <input
+              className="p-2 border rounded w-full"
+              placeholder="State"
+              value={originState}
+              onChange={(e) => setOriginState(e.target.value)}
+            />
+            <input
+              className="p-2 border rounded w-full"
+              placeholder="ZIP"
+              value={originZip}
+              onChange={(e) => setOriginZip(e.target.value)}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <input
+              className="p-2 border rounded w-full"
+              placeholder="Latitude"
+              value={originLat}
+              onChange={(e) => setOriginLat(e.target.value)}
+            />
+            <input
+              className="p-2 border rounded w-full"
+              placeholder="Longitude"
+              value={originLng}
+              onChange={(e) => setOriginLng(e.target.value)}
+            />
           </div>
         </div>
 
         {/* Destination Card */}
-        <div className="bg-gray-50 p-4 rounded border">
-          <h3 className="font-semibold mb-2">Destination (Receiver)</h3>
-          <div className="space-y-2">
-            <label className="block text-sm">
-              Receiver name
-              <input
-                className="mt-1 p-2 w-full border rounded"
-                value={receiverName}
-                onChange={(e) => setReceiverName(e.target.value)}
-              />
-            </label>
+        <div className="bg-gray-50 p-4 rounded-xl border shadow-sm space-y-3">
+          <h3 className="font-semibold text-lg mb-2">Destination (Receiver)</h3>
 
-            <label className="block text-sm">
-              Receiver email
-              <input
-                type="email"
-                className="mt-1 p-2 w-full border rounded"
-                value={receiverEmail}
-                onChange={(e) => setReceiverEmail(e.target.value)}
-              />
-            </label>
+          <label className="block text-sm">
+            Receiver name
+            <input
+              className="mt-1 p-2 w-full border rounded"
+              value={receiverName}
+              onChange={(e) => setReceiverName(e.target.value)}
+              placeholder="Jane Smith"
+            />
+          </label>
 
-            <label className="block text-sm">
-              Street address
-              <input
-                className="mt-1 p-2 w-full border rounded"
-                value={destAddressFull}
-                onChange={(e) => setDestAddressFull(e.target.value)}
-              />
-            </label>
+          <label className="block text-sm">
+            Receiver email
+            <input
+              type="email"
+              className="mt-1 p-2 w-full border rounded"
+              value={receiverEmail}
+              onChange={(e) => setReceiverEmail(e.target.value)}
+              placeholder="jane@example.com"
+            />
+          </label>
 
-            <div className="flex gap-2">
-              <input
-                className="p-2 border rounded flex-1"
-                placeholder="City"
-                value={destCity}
-                onChange={(e) => setDestCity(e.target.value)}
-              />
-              <input
-                className="p-2 border rounded w-28"
-                placeholder="State"
-                value={destState}
-                onChange={(e) => setDestState(e.target.value)}
-              />
-              <input
-                className="p-2 border rounded w-28"
-                placeholder="ZIP"
-                value={destZip}
-                onChange={(e) => setDestZip(e.target.value)}
-              />
-            </div>
+          <label className="block text-sm">
+            Street address
+            <input
+              className="mt-1 p-2 w-full border rounded"
+              value={destAddressFull}
+              onChange={(e) => setDestAddressFull(e.target.value)}
+              placeholder="456 Elm Ave"
+            />
+          </label>
 
-            <div className="flex gap-2">
-              <input
-                className="p-2 border rounded flex-1"
-                placeholder="Latitude"
-                value={destLat}
-                onChange={(e) => setDestLat(e.target.value)}
-              />
-              <input
-                className="p-2 border rounded w-40"
-                placeholder="Longitude"
-                value={destLng}
-                onChange={(e) => setDestLng(e.target.value)}
-              />
-            </div>
-
-            <label className="block text-sm">
-              Expected delivery date
-              <input
-                type="date"
-                className="mt-1 p-2 w-full border rounded"
-                value={destExpectedDeliveryDate}
-                onChange={(e) => setDestExpectedDeliveryDate(e.target.value)}
-              />
-            </label>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <input
+              className="p-2 border rounded w-full"
+              placeholder="City"
+              value={destCity}
+              onChange={(e) => setDestCity(e.target.value)}
+            />
+            <input
+              className="p-2 border rounded w-full"
+              placeholder="State"
+              value={destState}
+              onChange={(e) => setDestState(e.target.value)}
+            />
+            <input
+              className="p-2 border rounded w-full"
+              placeholder="ZIP"
+              value={destZip}
+              onChange={(e) => setDestZip(e.target.value)}
+            />
           </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <input
+              className="p-2 border rounded w-full"
+              placeholder="Latitude"
+              value={destLat}
+              onChange={(e) => setDestLat(e.target.value)}
+            />
+            <input
+              className="p-2 border rounded w-full"
+              placeholder="Longitude"
+              value={destLng}
+              onChange={(e) => setDestLng(e.target.value)}
+            />
+          </div>
+
+          <label className="block text-sm">
+            Expected delivery date
+            <input
+              type="date"
+              className="mt-1 p-2 w-full border rounded"
+              value={destExpectedDeliveryDate}
+              onChange={(e) => setDestExpectedDeliveryDate(e.target.value)}
+            />
+          </label>
         </div>
       </div>
 
       {/* Dates, Image, Status and Actions row */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4">
         <div className="bg-gray-50 p-4 rounded border">
           <h4 className="font-medium mb-2">Dates</h4>
           <label className="block text-sm mb-2">
