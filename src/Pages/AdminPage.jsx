@@ -66,38 +66,61 @@ export default function AdminPage() {
   }
 
   async function updateRecordWithKey(id, payload) {
-    const idStr = normalizeId(id);
-    if (!idStr) throw new Error("Missing record id");
+    // id may be trackingId or an _id string. Use string form.
+    const idStr = String(id);
+    const adminKey =
+      typeof window !== "undefined" ? localStorage.getItem("adminKey") : null;
+    if (!adminKey) throw new Error("Missing admin key");
 
-    // Debug: log outgoing request on client
-    console.log("▶️ updateRecordWithKey ->", { id: idStr, payload });
+    // Use the index PATCH signature your server currently handles:
+    // { trackingId, updates }
+    const body = JSON.stringify({ trackingId: idStr, updates: payload });
 
-    const res = await apiFetch(
-      `/api/admin/records/${encodeURIComponent(idStr)}`,
-      {
-        method: "PATCH",
-        body: JSON.stringify(payload),
-      }
-    );
+    const res = await fetch(`/api/admin/records`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        "x-admin-key": adminKey,
+      },
+      body,
+      cache: "no-store",
+    });
 
-    let body = null;
+    let bodyJson = null;
     try {
-      body = await res.json();
+      bodyJson = await res.json();
     } catch (e) {
       const txt = await res.text().catch(() => null);
       throw new Error(txt || `HTTP ${res.status}`);
     }
 
     if (!res.ok) {
+      // if server returned helpful error, surface it
       throw new Error(
-        body?.error || JSON.stringify(body) || `HTTP ${res.status}`
+        bodyJson?.error || JSON.stringify(bodyJson) || `HTTP ${res.status}`
       );
     }
 
-    if (body && body._id && typeof body._id !== "string") {
-      body._id = body._id.toString();
+    // server should return the updated document in bodyJson.updatedRecord OR the doc directly
+    const updated = bodyJson.updatedRecord || bodyJson;
+
+    // normalize _id if it's an object
+    if (updated && updated._id && typeof updated._id !== "string") {
+      try {
+        updated._id = updated._id.toString();
+      } catch {}
     }
-    return body;
+
+    // if the server didn't return a doc, fallback: reload records list (safe)
+    if (!updated || (!updated.trackingId && !updated._id)) {
+      // best-effort resync
+      await loadRecords();
+      throw new Error(
+        "Update completed but server didn't return updated record; reloaded list."
+      );
+    }
+
+    return updated;
   }
 
   async function nextStopWithKey(id) {
@@ -162,20 +185,32 @@ export default function AdminPage() {
   }
 
   async function handleUpdate(idOrTrackingId, payload) {
-    const updated = await updateRecordWithKey(idOrTrackingId, payload);
-    const updatedIdStr = normalizeId(updated._id);
-    const updatedTrackingId = updated.trackingId;
+    try {
+      const updated = await updateRecordWithKey(idOrTrackingId, payload);
 
-    setRecords((s) =>
-      s.map((r) =>
-        normalizeId(r._id) === updatedIdStr ||
-        r.trackingId === updatedTrackingId
-          ? updated
-          : r
-      )
-    );
-    setEditing(null);
-    return updated;
+      const updatedIdStr = normalizeId(updated._id);
+      const updatedTrackingId = updated.trackingId;
+
+      setRecords((s) =>
+        s.map((r) => {
+          const rIdStr = normalizeId(r._id);
+          return rIdStr === updatedIdStr || r.trackingId === updatedTrackingId
+            ? { ...r, ...updated } // merge to preserve any fields the UI had
+            : r;
+        })
+      );
+
+      setEditing(null);
+      return updated;
+    } catch (err) {
+      console.error("Update failed (handleUpdate):", err);
+      // fallback: reload records so UI reflects DB
+      try {
+        await loadRecords();
+      } catch {}
+      setEditing(null);
+      throw err;
+    }
   }
 
   async function handleNext(idOrTrackingId) {
