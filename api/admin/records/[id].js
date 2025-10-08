@@ -116,7 +116,7 @@ export default async function handler(req, res) {
         .json({ error: "Missing id in request path or query" });
     }
 
-    // ✅ FIX: robust body parsing (handles stream bodies on Vercel)
+    // ✅ Robust body parsing (handles stream bodies on Vercel)
     let bodyRaw = "";
     try {
       if (typeof req.body === "string") {
@@ -124,7 +124,7 @@ export default async function handler(req, res) {
       } else if (req.body && Object.keys(req.body).length) {
         bodyRaw = JSON.stringify(req.body);
       } else {
-        // body may be a stream
+        // body may be a stream (Vercel edge/runtime quirk)
         for await (const chunk of req) bodyRaw += chunk;
       }
     } catch (e) {
@@ -139,7 +139,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Invalid JSON body" });
     }
 
-    // allowed fields
+    // ✅ Allowed fields
     const allowed = [
       "customerName",
       "product",
@@ -159,8 +159,49 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "No valid fields to update" });
     }
 
+    // ✅ Timestamp updates
     set.updatedAt = new Date().toISOString();
     set.lastUpdated = set.updatedAt;
+
+    // ✅ Build filter ($or for _id and trackingId)
+    const orClauses = [{ trackingId: id }];
+    try {
+      if (ObjectId.isValid(id)) orClauses.unshift({ _id: new ObjectId(id) });
+    } catch (e) {
+      console.warn("⚠️ Invalid ObjectId format:", e);
+    }
+
+    console.log("➡️ PATCH $or filter:", JSON.stringify(orClauses));
+    console.log("➡️ PATCH update payload:", set);
+
+    // ✅ Execute update
+    let result;
+    try {
+      result = await col.findOneAndUpdate(
+        { $or: orClauses },
+        { $set: set },
+        { returnDocument: "after" }
+      );
+    } catch (err) {
+      console.error("❌ PATCH: findOneAndUpdate error:", String(err));
+      return res
+        .status(500)
+        .json({ error: "update failed", detail: String(err) });
+    }
+
+    if (!result.value) {
+      console.log("❌ PATCH: no document matched for id:", id);
+      return res.status(404).json({ error: "Not found" });
+    }
+
+    // ✅ Normalize _id to string
+    const updatedDoc = {
+      ...result.value,
+      _id: result.value._id?.toString?.() || result.value._id,
+    };
+
+    console.log("✅ PATCH updated:", updatedDoc._id || updatedDoc.trackingId);
+    return res.json(updatedDoc);
   }
 
   // === DELETE === (production)
