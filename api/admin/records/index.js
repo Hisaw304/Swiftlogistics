@@ -1,15 +1,19 @@
+// pages/api/admin/records/index.js
 import { connectToDatabase } from "../../shared/mongo.js";
 import { randomUUID } from "crypto";
 import { generateRoute } from "./routeGenerator.js";
-import { ObjectId } from "mongodb"; // ✅ Add this line
+import { ObjectId } from "mongodb";
 
+/**
+ * Simple admin check (same as your original)
+ */
 const ADMIN = (req) => {
   const key = req.headers["x-admin-key"] || req.query?.adminKey;
   return key && key === process.env.ADMIN_KEY;
 };
 
 export default async function handler(req, res) {
-  // TEMP: debug env presence (DO NOT log secrets)
+  // TEMP: debug env presence (DO NOT log secrets in production)
   console.log("ENV_CHECK:", {
     node_env: process.env.NODE_ENV || null,
     has_mongo_uri: !!process.env.MONGODB_URI,
@@ -17,12 +21,11 @@ export default async function handler(req, res) {
     has_ors_key: !!process.env.ORS_API_KEY,
   });
 
-  // === wrap whole handler so unexpected throws return JSON and log stack ===
   try {
     // === CORS setup ===
-    // For debugging you can set origin to '*' then lock it down after verified
+    // NOTE: for debugging this is permissive. Replace '*' with your origin when done.
     const CORS_HEADERS = {
-      "Access-Control-Allow-Origin": "*", // <-- temporarily permissive for debugging
+      "Access-Control-Allow-Origin": "*", // <-- change back to your domain after debugging
       "Access-Control-Allow-Methods": "GET,POST,PATCH,DELETE,OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type,x-admin-key",
     };
@@ -47,8 +50,7 @@ export default async function handler(req, res) {
     // Connect to DB with its own try/catch (so we can log cleanly)
     let dbConn;
     try {
-      const conn = await connectToDatabase();
-      dbConn = conn;
+      dbConn = await connectToDatabase();
     } catch (dbErr) {
       console.error(
         "DB connection failed:",
@@ -62,10 +64,8 @@ export default async function handler(req, res) {
     const { db } = dbConn;
     const col = db.collection("trackings");
 
-    // ROUTES: keep the rest of your code exactly the same...
     // === GET: list with pagination ===
     if (req.method === "GET") {
-      // your GET code unchanged
       const page = Math.max(1, parseInt(req.query.page || "1", 10));
       const limit = Math.max(
         1,
@@ -108,7 +108,7 @@ export default async function handler(req, res) {
       const trackingId =
         (body.trackingId && String(body.trackingId).trim()) || randomUUID();
 
-      // helpers (same as you had)
+      // helpers
       const safeStr = (v) =>
         typeof v === "string" ? v.trim() || null : v ?? null;
       const toIso = (d) => {
@@ -122,13 +122,88 @@ export default async function handler(req, res) {
         }
       };
 
-      // build origin/destination/address (same code omitted here for brevity)
-      // I'll keep the original code block unchanged — copy your original blocks in here.
-      // ...
-      // For brevity in this snippet, assume you paste the rest of your original POST code
-      // starting from building `origin`, `destination`, `address`, and onwards.
+      // build origin (allow nested or flat fields)
+      const origin =
+        body.origin ||
+        (body.originName || body.originAddressFull
+          ? {
+              name: safeStr(body.originName) || null,
+              address: {
+                full: safeStr(body.originAddressFull) || null,
+                city: safeStr(body.originCity) || null,
+                state: safeStr(body.originState) || null,
+                zip: safeStr(body.originZip) || null,
+              },
+              location:
+                body.origin?.location ||
+                (body.originLat && body.originLng
+                  ? {
+                      type: "Point",
+                      coordinates: [
+                        Number(body.originLng),
+                        Number(body.originLat),
+                      ],
+                    }
+                  : null),
+            }
+          : null);
 
-      // IMPORTANT: wrap generateRoute in a try/catch and log its input & errors
+      // build destination (nested or flat)
+      const destination =
+        body.destination ||
+        (body.receiverName || body.destAddressFull || body.receiverEmail
+          ? {
+              receiverName:
+                safeStr(body.receiverName) ||
+                safeStr(body.customerName) ||
+                null,
+              receiverEmail:
+                safeStr(body.receiverEmail) ||
+                safeStr(body.customerEmail) ||
+                null,
+              address: {
+                full: safeStr(body.destAddressFull) || null,
+                city: safeStr(body.destCity) || null,
+                state: safeStr(body.destState) || null,
+                zip: safeStr(body.destZip) || null,
+              },
+              location:
+                body.destination?.location ||
+                (body.destLat && body.destLng
+                  ? {
+                      type: "Point",
+                      coordinates: [Number(body.destLng), Number(body.destLat)],
+                    }
+                  : null),
+              expectedDeliveryDate:
+                toIso(body.destExpectedDeliveryDate) ||
+                toIso(body.expectedDeliveryDate) ||
+                null,
+            }
+          : null);
+
+      // back-compat top-level address
+      const address = (() => {
+        if (body.address && typeof body.address === "object") {
+          return {
+            full: safeStr(body.address.full) || null,
+            city: safeStr(body.address.city) || null,
+            state: safeStr(body.address.state) || null,
+            zip: safeStr(body.address.zip) || null,
+          };
+        }
+        if (body.addressFull || body.city || body.state || body.zip) {
+          return {
+            full: safeStr(body.addressFull) || null,
+            city: safeStr(body.city) || null,
+            state: safeStr(body.state) || null,
+            zip: safeStr(body.zip) || null,
+          };
+        }
+        return null;
+      })();
+
+      // route: prefer provided route, otherwise generate
       let route =
         Array.isArray(body.route) && body.route.length ? body.route : null;
       const originLabel =
@@ -169,26 +244,306 @@ export default async function handler(req, res) {
         }
       }
 
-      // ... continue with rest of your POST code to compute currentIndex/currentLocation/doc and insert
+      // currentIndex, default 0
+      let currentIndex = Number.isFinite(Number(body.currentIndex))
+        ? Number(body.currentIndex)
+        : 0;
+      currentIndex = Math.max(0, currentIndex);
+
+      // compute currentLocation from provided, origin, or route
+      const currentLocation =
+        body.currentLocation && body.currentLocation.type === "Point"
+          ? body.currentLocation
+          : route && route[currentIndex] && route[currentIndex].location
+          ? route[currentIndex].location
+          : origin && origin.location
+          ? origin.location
+          : null;
+
+      // compute progress
+      const totalStops = Array.isArray(route) ? route.length : 0;
+      let progressPct =
+        totalStops > 1
+          ? Math.round((currentIndex / (totalStops - 1)) * 100)
+          : 0;
+
+      // normalize dates
+      const shipmentDateIso = toIso(body.shipmentDate) || null;
+      const expectedDeliveryIso =
+        toIso(body.expectedDeliveryDate) ||
+        destination?.expectedDeliveryDate ||
+        null;
+
+      // status auto-rules
+      const statusRaw =
+        safeStr(body.status) || safeStr(body.initialStatus) || "Pending";
+      const status = String(statusRaw).trim();
+
+      // If status is Shipped and there is no shipmentDate, set it to now
+      const computedShipmentDate =
+        status.toLowerCase() === "shipped"
+          ? shipmentDateIso || now
+          : shipmentDateIso;
+
+      // If delivered — set progress to 100 and currentIndex to last
+      if (status.toLowerCase() === "delivered") {
+        if (Array.isArray(route) && route.length > 0) {
+          currentIndex = Math.max(0, route.length - 1);
+        }
+        progressPct = 100;
+      } else {
+        // recompute progress normally if not delivered
+        if (totalStops > 1) {
+          progressPct = Math.round((currentIndex / (totalStops - 1)) * 100);
+        } else {
+          progressPct = progressPct ?? 0;
+        }
+      }
+
+      // build the document
+      const doc = {
+        trackingId,
+        serviceType: safeStr(body.serviceType) || "standard",
+        shipmentDetails: safeStr(body.shipmentDetails) || "",
+        productDescription:
+          safeStr(body.productDescription) || safeStr(body.product) || null,
+        product: safeStr(body.product) || null,
+        quantity: Number.isFinite(Number(body.quantity))
+          ? Number(body.quantity)
+          : 1,
+        weightKg: Number.isFinite(Number(body.weightKg))
+          ? Number(body.weightKg)
+          : null,
+        description: safeStr(body.description) || null,
+        origin: origin || null,
+        destination: destination || null,
+        address: address || null,
+        originWarehouse:
+          safeStr(body.originWarehouse) ||
+          (origin && origin.address && origin.address.city) ||
+          null,
+        route,
+        currentIndex,
+        currentLocation,
+        progressPct,
+        shipmentDate: computedShipmentDate || null,
+        expectedDeliveryDate: expectedDeliveryIso || null,
+        status,
+        locationHistory: Array.isArray(body.locationHistory)
+          ? body.locationHistory
+          : [],
+        imageUrl: safeStr(body.imageUrl) || safeStr(body.image) || null,
+        image: safeStr(body.image) || safeStr(body.imageUrl) || null,
+        createdAt: now,
+        updatedAt: now,
+        lastUpdated: now,
+        updatedBy: safeStr(body.updatedBy) || null,
+      };
+
       try {
-        // build final `doc` exactly as you currently do and insert
-        // (paste your existing doc creation and insertOne code here)
+        await col.insertOne(doc);
+        return res.status(201).json(doc);
       } catch (err) {
-        console.error(
-          "Create record error:",
-          err && err.stack ? err.stack : String(err)
-        );
+        console.error("Create record error:", String(err));
         return res
           .status(500)
           .json({ error: "create failed", detail: String(err) });
       }
     }
 
-    // === PATCH, DELETE and fallback ===
-    // Keep these blocks unchanged but they are already inside the top-level try/catch,
-    // so unexpected throws will be caught and logged below.
+    // === PATCH ===
+    if (req.method === "PATCH") {
+      let body = {};
+      try {
+        body =
+          typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
+      } catch {
+        return res.status(400).json({ error: "Invalid JSON body" });
+      }
 
-    // Paste your PATCH and DELETE blocks here exactly as they were.
+      const { trackingId, updates } = body;
+
+      if (!trackingId) {
+        return res.status(400).json({ error: "trackingId required" });
+      }
+
+      const now = new Date();
+
+      // build a safe query for either trackingId or _id
+      let query = { $or: [{ trackingId }] };
+      try {
+        query.$or.push({ _id: new ObjectId(trackingId) });
+      } catch {
+        // ignore invalid ObjectId
+      }
+
+      try {
+        // Fetch existing doc to recompute derived fields reliably
+        const existing = await col.findOne(query);
+        if (!existing) {
+          return res.status(404).json({ error: "Record not found" });
+        }
+
+        // Prepare updates object safely
+        const updatesObj =
+          typeof updates === "object" && updates ? updates : {};
+
+        // Merge route/currentIndex/status from updates or existing for recompute
+        const route = Array.isArray(updatesObj.route)
+          ? updatesObj.route
+          : Array.isArray(existing.route)
+          ? existing.route
+          : [];
+
+        let currentIndex = Number.isFinite(Number(updatesObj.currentIndex))
+          ? Number(updatesObj.currentIndex)
+          : Number.isFinite(Number(existing.currentIndex))
+          ? Number(existing.currentIndex)
+          : 0;
+        currentIndex = Math.max(0, currentIndex);
+
+        const totalStops = Array.isArray(route) ? route.length : 0;
+        let progressPct =
+          totalStops > 1
+            ? Math.round((currentIndex / (totalStops - 1)) * 100)
+            : 0;
+
+        // Status handling: prefer updated status, then existing
+        const statusRaw =
+          (updatesObj.status && String(updatesObj.status)) ||
+          existing.status ||
+          "Pending";
+        const status = String(statusRaw).trim();
+
+        // Shipment date handling
+        const toIso = (d) => {
+          if (!d) return null;
+          try {
+            const dd = new Date(d);
+            if (isNaN(dd.getTime())) return null;
+            return dd.toISOString();
+          } catch {
+            return null;
+          }
+        };
+        const shipmentDateIso = updatesObj.shipmentDate
+          ? toIso(updatesObj.shipmentDate)
+          : existing.shipmentDate || null;
+
+        // If status becomes "Shipped" and no shipmentDate, set to now
+        const computedShipmentDate =
+          status.toLowerCase() === "shipped"
+            ? shipmentDateIso || now.toISOString()
+            : shipmentDateIso;
+
+        // If delivered — set progress to 100 and currentIndex to last
+        if (status.toLowerCase() === "delivered") {
+          if (Array.isArray(route) && route.length > 0) {
+            currentIndex = Math.max(0, route.length - 1);
+          }
+          progressPct = 100;
+        } else {
+          // recompute progress normally if not delivered
+          if (totalStops > 1) {
+            progressPct = Math.round((currentIndex / (totalStops - 1)) * 100);
+          } else {
+            progressPct = progressPct ?? 0;
+          }
+        }
+
+        // compute currentLocation: prefer updates, fall back to route/current/origin in existing doc
+        const currentLocation =
+          updatesObj.currentLocation &&
+          updatesObj.currentLocation.type === "Point"
+            ? updatesObj.currentLocation
+            : route && route[currentIndex] && route[currentIndex].location
+            ? route[currentIndex].location
+            : existing.origin && existing.origin.location
+            ? existing.origin.location
+            : null;
+
+        // Build final $set updates: include derived fields
+        const finalUpdates = {
+          ...(updatesObj || {}),
+          currentIndex,
+          currentLocation,
+          progressPct,
+          status,
+          shipmentDate: computedShipmentDate || null,
+          updatedAt: now,
+          lastUpdated: now,
+        };
+
+        const result = await col.findOneAndUpdate(
+          query,
+          {
+            $set: finalUpdates,
+          },
+          { returnDocument: "after" }
+        );
+
+        if (!result.value) {
+          return res.status(404).json({ error: "Record not found" });
+        }
+
+        return res.status(200).json({
+          message: "Record updated successfully",
+          updatedRecord: result.value,
+        });
+      } catch (err) {
+        console.error(
+          "PATCH error:",
+          err && err.stack ? err.stack : String(err)
+        );
+        return res
+          .status(500)
+          .json({ error: "Update failed", detail: String(err) });
+      }
+    }
+
+    // === DELETE: remove a record by trackingId or _id ===
+    if (req.method === "DELETE") {
+      // Accept id in body or query: { trackingId } or ?id=
+      let body = {};
+      try {
+        body =
+          typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
+      } catch {
+        body = {};
+      }
+
+      const trackingId = String(
+        req.query.id || body.trackingId || body.id || ""
+      ).trim();
+      if (!trackingId) {
+        return res.status(400).json({ error: "trackingId (or id) required" });
+      }
+
+      const query = { $or: [{ trackingId }] };
+      try {
+        query.$or.push({ _id: new ObjectId(trackingId) });
+      } catch {
+        // ignore invalid ObjectId
+      }
+
+      try {
+        const result = await col.findOneAndDelete(query);
+        if (!result.value) {
+          return res.status(404).json({ error: "Record not found" });
+        }
+        return res
+          .status(200)
+          .json({ message: "Record deleted", deleted: result.value });
+      } catch (err) {
+        console.error(
+          "DELETE error:",
+          err && err.stack ? err.stack : String(err)
+        );
+        return res
+          .status(500)
+          .json({ error: "Delete failed", detail: String(err) });
+      }
+    }
 
     // fallback for other methods
     return res.status(405).json({ error: "Method not allowed" });
@@ -200,7 +555,6 @@ export default async function handler(req, res) {
         ? unhandledErr.stack
         : String(unhandledErr)
     );
-    // Return a safe JSON error so the platform doesn't return a generic FUNCTION_INVOCATION_FAILED
     return res
       .status(500)
       .json({ error: "Internal server error", detail: String(unhandledErr) });
