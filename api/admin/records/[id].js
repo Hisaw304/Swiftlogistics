@@ -20,11 +20,13 @@ export default async function handler(req, res) {
   // Respond to preflight
   if (req.method === "OPTIONS") {
     Object.entries(CORS_HEADERS).forEach(([k, v]) => res.setHeader(k, v));
+    // prevent caching of preflight responses
+    res.setHeader("Cache-Control", "no-store, max-age=0, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
     console.log("🟢 OPTIONS preflight hit");
     return res.status(204).end();
   }
 
-  // Apply headers
   // Apply headers
   Object.entries(CORS_HEADERS).forEach(([k, v]) => res.setHeader(k, v));
   res.setHeader("Content-Type", "application/json");
@@ -43,22 +45,32 @@ export default async function handler(req, res) {
   const col = db.collection("trackings");
 
   const { id } = req.query;
-  let filter;
 
-  if (ObjectId.isValid(id)) {
-    filter = { _id: new ObjectId(id) };
-    console.log("🟢 Using _id filter:", filter);
-  } else {
-    filter = { trackingId: id };
-    console.log("🟢 Using trackingId filter:", filter);
-  }
+  // === Helper to build filters ===
+  const buildFilters = (rawId) => {
+    const filters = [];
+    try {
+      if (ObjectId.isValid(rawId)) {
+        filters.push({ _id: new ObjectId(rawId) });
+      }
+    } catch {}
+    // always include trackingId fallback (string)
+    filters.push({ trackingId: rawId });
+    return filters;
+  };
 
   // === GET ===
   if (req.method === "GET") {
-    console.log("📦 Fetching record...");
-    const doc = await col.findOne(filter);
+    const filters = buildFilters(id);
+    console.log("📦 Fetching record using filters:", filters);
+    // try each filter until we find a document
+    let doc = null;
+    for (const f of filters) {
+      doc = await col.findOne(f);
+      if (doc) break;
+    }
     if (!doc) {
-      console.log("❌ Record not found");
+      console.log("❌ Record not found for id:", id);
       return res.status(404).json({ error: "Not found" });
     }
     console.log("✅ Record found:", doc.trackingId || doc._id);
@@ -94,21 +106,63 @@ export default async function handler(req, res) {
     set.updatedAt = new Date().toISOString();
     set.lastUpdated = set.updatedAt;
 
-    const result = await col.updateOne(filter, { $set: set });
-    console.log("🟢 Update result:", result);
+    // try filters in order, update the first match
+    const filters = buildFilters(id);
+    let updated = null;
+    for (const f of filters) {
+      const result = await col.updateOne(f, { $set: set });
+      console.log(
+        "🟢 Update result for filter",
+        f,
+        ":",
+        JSON.stringify(result)
+      );
+      if (result.matchedCount > 0) {
+        updated = await col.findOne(f);
+        break;
+      }
+    }
 
-    const updated = await col.findOne(filter);
+    if (!updated) {
+      console.log("❌ No document matched for PATCH with id:", id);
+      return res.status(404).json({ error: "Not found" });
+    }
+
     console.log("✅ Updated document:", updated?.trackingId || updated?._id);
     return res.json(updated);
   }
 
   // === DELETE ===
   if (req.method === "DELETE") {
-    console.log("🗑 DELETE request received for:", filter);
-    const delResult = await col.deleteOne(filter);
-    console.log("🟢 Delete result:", JSON.stringify(delResult));
-    // return deletedCount so client can validate deletion
-    return res.json({ ok: true, deletedCount: delResult.deletedCount });
+    console.log("🗑 DELETE request received. raw id:", id);
+    const filters = buildFilters(id);
+    console.log("➡️ Attempting delete with filters:", filters);
+
+    let delResult = { deletedCount: 0 };
+    let usedFilter = null;
+
+    // Try each filter until one deletes
+    for (const f of filters) {
+      const result = await col.deleteOne(f);
+      console.log("🟢 deleteOne result for", f, ":", JSON.stringify(result));
+      if (result.deletedCount && result.deletedCount > 0) {
+        delResult = result;
+        usedFilter = f;
+        break;
+      }
+    }
+
+    console.log(
+      "🟡 Final delete result:",
+      JSON.stringify(delResult),
+      "usedFilter:",
+      usedFilter
+    );
+    return res.json({
+      ok: true,
+      deletedCount: delResult.deletedCount || 0,
+      usedFilter,
+    });
   }
 
   console.log("⚠️ Method not allowed:", req.method);

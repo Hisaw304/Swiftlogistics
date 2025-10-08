@@ -10,6 +10,18 @@ function formatTime(iso) {
   }
 }
 
+// small helper local to this file to ensure id is a string
+function idToString(id, trackingId) {
+  try {
+    if (id == null) return trackingId || "";
+    return typeof id === "object" && typeof id.toString === "function"
+      ? id.toString()
+      : String(id);
+  } catch {
+    return trackingId || String(id);
+  }
+}
+
 export default function RecordsTable({
   records = [],
   onNext,
@@ -41,8 +53,12 @@ export default function RecordsTable({
               r.route && r.route.length > 1
                 ? Math.round((r.currentIndex / (r.route.length - 1)) * 100)
                 : 0;
+
+            const key = idToString(r._id, r.trackingId);
+            const idString = key; // normalized string id used by buttons
+
             return (
-              <tr key={r._id || r.trackingId} className="border-t">
+              <tr key={key} className="border-t">
                 <td className="px-3 py-2 align-top">
                   <div className="font-mono text-xs">{r.trackingId}</div>
                 </td>
@@ -72,19 +88,19 @@ export default function RecordsTable({
                 <td className="px-3 py-2 align-top space-x-2">
                   <button
                     className="px-2 py-1 bg-blue-600 text-white text-xs rounded"
-                    onClick={() => onNext(r._id || r.trackingId)}
+                    onClick={() => onNext && onNext(idString)}
                   >
                     Next Stop
                   </button>
                   <button
                     className="px-2 py-1 bg-gray-100 text-xs rounded"
-                    onClick={() => onEdit(r)}
+                    onClick={() => onEdit && onEdit(r)}
                   >
                     Edit
                   </button>
                   <button
                     className="px-2 py-1 bg-red-100 text-red-700 text-xs rounded"
-                    onClick={() => onDelete && onDelete(r._id || r.trackingId)}
+                    onClick={() => onDelete && onDelete(idString)}
                   >
                     Delete
                   </button>
