@@ -307,39 +307,40 @@ export default async function handler(req, res) {
         .json({ error: "create failed", detail: String(err) });
     }
   }
-  // === PATCH: update existing record ===
   if (req.method === "PATCH") {
-    const { trackingId, updates } = req.body || {};
+    const { trackingId, updates } = req.body;
 
     if (!trackingId) {
-      return res.status(400).json({ error: "Missing trackingId" });
+      return res.status(400).json({ error: "trackingId required" });
     }
 
-    try {
-      const now = new Date().toISOString();
-      const result = await col.findOneAndUpdate(
-        { trackingId },
-        {
-          $set: {
-            ...(typeof updates === "object" ? updates : {}),
-            updatedAt: now,
-            lastUpdated: now,
-          },
+    const now = new Date();
+
+    const result = await col.findOneAndUpdate(
+      {
+        $or: [
+          { trackingId },
+          { _id: new ObjectId(trackingId) }, // allows either ID form
+        ],
+      },
+      {
+        $set: {
+          ...(typeof updates === "object" ? updates : {}),
+          updatedAt: now,
+          lastUpdated: now,
         },
-        { returnDocument: "after" }
-      );
+      },
+      { returnDocument: "after" }
+    );
 
-      if (!result.value) {
-        return res.status(404).json({ error: "Record not found" });
-      }
-
-      return res.status(200).json(result.value);
-    } catch (err) {
-      console.error("Update record error:", err);
-      return res
-        .status(500)
-        .json({ error: "update failed", detail: String(err) });
+    if (!result.value) {
+      return res.status(404).json({ error: "Record not found" });
     }
+
+    return res.status(200).json({
+      message: "Record updated successfully",
+      updatedRecord: result.value,
+    });
   }
 
   // fallback for other methods
