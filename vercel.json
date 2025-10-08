@@ -1,12 +1,11 @@
 {
   "version": 2,
   "functions": {
-    "api/**/*.js": {
-      "maxDuration": 60,
-      "memory": 1024
-    }
+    "api/**/*.js": { "maxDuration": 60, "memory": 1024 }
   },
   "routes": [
+    { "handle": "filesystem" },
+
     {
       "src": "/api/admin/records/([^/]+)$",
       "dest": "/api/admin/records/[id].js"
@@ -19,13 +18,9 @@
       "src": "/api/admin/records/next/([^/]+)$",
       "dest": "/api/admin/records/[id].next.js"
     },
-    {
-      "src": "/api/(.*)",
-      "dest": "/api/$1"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
-    }
+
+    { "src": "/api/(.*)", "dest": "/api/$1" },
+
+    { "src": "/(.*)", "dest": "/index.html" }
   ]
 }
