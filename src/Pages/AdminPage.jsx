@@ -167,7 +167,9 @@ export default function AdminPage() {
                     headers: { "x-admin-key": adminKey },
                   });
                   setRecords((s) =>
-                    s.filter((rr) => rr._id !== id && rr.trackingId !== id)
+                    s.filter(
+                      (rr) => rr._id?.toString() !== id && rr.trackingId !== id
+                    )
                   );
                 } catch {
                   alert("Delete failed.");
