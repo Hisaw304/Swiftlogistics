@@ -1,4 +1,3 @@
-// pages/api/admin/records/index.js
 import { connectToDatabase } from "../../shared/mongo.js";
 import { randomUUID } from "crypto";
 import { generateRoute } from "../../shared/routeGenerator.js";
@@ -455,6 +454,47 @@ export default async function handler(req, res) {
       return res
         .status(500)
         .json({ error: "Update failed", detail: String(err) });
+    }
+  }
+
+  // === DELETE: remove a record by trackingId or _id ===
+  if (req.method === "DELETE") {
+    // Accept id in body or query: { trackingId } or ?id=
+    let body = {};
+    try {
+      body =
+        typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
+    } catch {
+      body = {};
+    }
+
+    const trackingId = String(
+      req.query.id || body.trackingId || body.id || ""
+    ).trim();
+    if (!trackingId) {
+      return res.status(400).json({ error: "trackingId (or id) required" });
+    }
+
+    const query = { $or: [{ trackingId }] };
+    try {
+      query.$or.push({ _id: new ObjectId(trackingId) });
+    } catch {
+      // ignore invalid ObjectId
+    }
+
+    try {
+      const result = await col.findOneAndDelete(query);
+      if (!result.value) {
+        return res.status(404).json({ error: "Record not found" });
+      }
+      return res
+        .status(200)
+        .json({ message: "Record deleted", deleted: result.value });
+    } catch (err) {
+      console.error("DELETE error:", err);
+      return res
+        .status(500)
+        .json({ error: "Delete failed", detail: String(err) });
     }
   }
 
