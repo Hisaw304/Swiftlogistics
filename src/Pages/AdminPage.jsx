@@ -80,9 +80,8 @@ export default function AdminPage() {
     return res.json();
   }
 
-  // AdminPage (or lib/api) — recommended replacement for updateRecordWithKey
   async function updateRecordWithKey(id, payload) {
-    const idStr = normalizeId(id);
+    const idStr = String(id); // ✅ always use trackingId directly
     const adminKey =
       typeof window !== "undefined" ? localStorage.getItem("adminKey") : null;
     if (!adminKey) throw new Error("Missing admin key");
@@ -101,7 +100,6 @@ export default function AdminPage() {
     try {
       body = await res.json();
     } catch (e) {
-      // If server returned non-JSON, fall back to text for debugging
       const txt = await res.text().catch(() => null);
       throw new Error(txt || `HTTP ${res.status}`);
     }
@@ -112,7 +110,6 @@ export default function AdminPage() {
       );
     }
 
-    // ensure _id is a string for client code convenience
     if (body && body._id && typeof body._id !== "string") {
       body._id = body._id.toString();
     }
