@@ -186,24 +186,22 @@ export default async function handler(req, res) {
       console.error("🔎 Debug count failed:", String(e));
     }
 
-    // Attempt update
-    let result;
+    // Attempt update (robust, two-step)
+    let updateResult;
     try {
-      result = await col.findOneAndUpdate(
-        { $or: orClauses },
-        { $set: set },
-        { returnDocument: "after" }
-      );
+      updateResult = await col.updateOne({ $or: orClauses }, { $set: set });
+      console.log("➡️ updateOne result:", updateResult);
     } catch (err) {
-      console.error("❌ findOneAndUpdate error:", String(err));
+      console.error("❌ updateOne error:", String(err));
       return res
         .status(500)
         .json({ error: "update failed", detail: String(err) });
     }
 
-    if (!result?.value) {
+    // If nothing matched, report Not found
+    if (!updateResult || updateResult.matchedCount === 0) {
       console.log(
-        "❌ PATCH: no document matched for id:",
+        "❌ PATCH: updateOne matchedCount 0 for id:",
         id,
         "tried:",
         orClauses
@@ -213,11 +211,38 @@ export default async function handler(req, res) {
         .json({ error: "Not found", triedFilters: orClauses, idResolved: id });
     }
 
-    const updatedDoc = {
-      ...result.value,
-      _id: result.value._id?.toString?.() || result.value._id,
-    };
-    console.log("✅ PATCH updated:", updatedDoc._id || updatedDoc.trackingId);
+    // At least one doc matched — fetch the updated document to return it
+    let updatedDoc = null;
+    try {
+      updatedDoc = await col.findOne({ $or: orClauses });
+    } catch (e) {
+      console.error("❌ findOne after update failed:", String(e));
+      return res
+        .status(500)
+        .json({ error: "fetch after update failed", detail: String(e) });
+    }
+
+    if (!updatedDoc) {
+      // Defensive fallback (very unlikely since matchedCount > 0)
+      console.warn(
+        "⚠️ matched >0 but findOne returned null. Returning generic success."
+      );
+      return res.json({
+        ok: true,
+        matchedCount: updateResult.matchedCount,
+        modifiedCount: updateResult.modifiedCount,
+      });
+    }
+
+    // Normalize _id to string
+    if (updatedDoc._id && typeof updatedDoc._id !== "string") {
+      updatedDoc._id = updatedDoc._id.toString();
+    }
+
+    console.log(
+      "✅ PATCH updated (via updateOne):",
+      updatedDoc._id || updatedDoc.trackingId
+    );
     return res.json(updatedDoc);
   }
 
