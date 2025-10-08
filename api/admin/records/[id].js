@@ -116,13 +116,26 @@ export default async function handler(req, res) {
         .json({ error: "Missing id in request path or query" });
     }
 
-    // parse body
-    let body;
+    // ✅ FIX: robust body parsing (handles stream bodies on Vercel)
+    let bodyRaw = "";
     try {
-      body =
-        typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
+      if (typeof req.body === "string") {
+        bodyRaw = req.body;
+      } else if (req.body && Object.keys(req.body).length) {
+        bodyRaw = JSON.stringify(req.body);
+      } else {
+        // body may be a stream
+        for await (const chunk of req) bodyRaw += chunk;
+      }
     } catch (e) {
-      console.error("❌ PATCH: invalid JSON body", e);
+      console.error("❌ Error reading body stream:", e);
+    }
+
+    let body = {};
+    try {
+      body = bodyRaw ? JSON.parse(bodyRaw) : {};
+    } catch (e) {
+      console.error("❌ PATCH: invalid JSON body", e, "raw:", bodyRaw);
       return res.status(400).json({ error: "Invalid JSON body" });
     }
 
@@ -146,47 +159,8 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "No valid fields to update" });
     }
 
-    // timestamps
     set.updatedAt = new Date().toISOString();
     set.lastUpdated = set.updatedAt;
-
-    // build $or clauses (ObjectId or trackingId)
-    const orClauses = [{ trackingId: id }];
-    try {
-      if (ObjectId.isValid(id)) orClauses.unshift({ _id: new ObjectId(id) });
-    } catch (e) {
-      console.warn("ObjectId construction failed:", e);
-    }
-    console.log("➡️ PATCH $or filter:", JSON.stringify(orClauses));
-    console.log("➡️ PATCH update payload:", set);
-
-    // perform update and return AFTER
-    let result;
-    try {
-      result = await col.findOneAndUpdate(
-        { $or: orClauses },
-        { $set: set },
-        { returnDocument: "after" } // returns document after update
-      );
-    } catch (err) {
-      console.error("❌ PATCH: findOneAndUpdate error:", String(err));
-      return res
-        .status(500)
-        .json({ error: "update failed", detail: String(err) });
-    }
-
-    if (!result.value) {
-      console.log("❌ PATCH: no document matched for id:", id);
-      return res.status(404).json({ error: "Not found" });
-    }
-
-    // normalize _id to string for client convenience
-    const updatedDoc = {
-      ...result.value,
-      _id: result.value._id?.toString?.() || result.value._id,
-    };
-    console.log("✅ PATCH updated:", updatedDoc._id || updatedDoc.trackingId);
-    return res.json(updatedDoc);
   }
 
   // === DELETE === (production)
