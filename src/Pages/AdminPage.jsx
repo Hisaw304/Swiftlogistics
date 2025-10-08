@@ -3,6 +3,17 @@ import AdminForm from "../components/AdminForm";
 import RecordsTable from "../components/RecordsTable";
 import TrackingModal from "../components/TrackingModal";
 import { fetchRecords, createRecord, updateRecord, nextStop } from "../lib/api";
+// helper: normalize ObjectId or string to a string
+function normalizeId(id) {
+  if (id == null) return String(id);
+  try {
+    return typeof id === "object" && typeof id.toString === "function"
+      ? id.toString()
+      : String(id);
+  } catch {
+    return String(id);
+  }
+}
 
 export default function AdminPage() {
   const [records, setRecords] = useState([]);
@@ -34,7 +45,28 @@ export default function AdminPage() {
     setLoading(true);
     setError(null);
     try {
-      const json = await fetchRecords({ limit: 200 });
+      // use direct fetch so we can include the admin key header reliably
+      const q = `?limit=200`;
+      const res = await fetch(`/api/admin/records${q}`, {
+        method: "GET",
+        headers: {
+          "x-admin-key": adminKey || "",
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!res.ok) {
+        // read server error if possible
+        let body = null;
+        try {
+          body = await res.json();
+        } catch (e) {
+          body = await res.text().catch(() => null);
+        }
+        throw new Error(body?.error || body || `HTTP ${res.status}`);
+      }
+
+      const json = await res.json();
       setRecords(Array.isArray(json.items) ? json.items : json.items || []);
     } catch (err) {
       setError(err.message || "Failed to load records.");
@@ -119,13 +151,19 @@ export default function AdminPage() {
   async function handleNext(idOrTrackingId) {
     try {
       const updated = await nextStop(idOrTrackingId);
+
+      const updatedIdStr = normalizeId(updated._id);
+      const updatedTrackingId = updated.trackingId;
+
       setRecords((s) =>
-        s.map((r) =>
-          r._id === updated._id || r.trackingId === updated.trackingId
+        s.map((r) => {
+          const rIdStr = normalizeId(r._id);
+          return rIdStr === updatedIdStr || r.trackingId === updatedTrackingId
             ? updated
-            : r
-        )
+            : r;
+        })
       );
+
       return updated;
     } catch (err) {
       alert(err.message || "Failed to advance.");
