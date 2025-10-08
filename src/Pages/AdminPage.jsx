@@ -162,24 +162,17 @@ export default function AdminPage() {
               onDelete={async (id) => {
                 if (!confirm("Delete this record?")) return;
                 try {
-                  const recordId = id?.toString?.() || id; // ensure string
-                  const res = await fetch(
-                    `/api/admin/records/${encodeURIComponent(recordId)}`,
-                    {
-                      method: "DELETE",
-                      headers: { "x-admin-key": adminKey },
-                    }
-                  );
-                  if (!res.ok) throw new Error("Delete failed");
+                  await fetch(`/api/admin/records/${encodeURIComponent(id)}`, {
+                    method: "DELETE",
+                    headers: { "x-admin-key": adminKey },
+                  });
                   setRecords((s) =>
                     s.filter(
-                      (r) =>
-                        r._id?.toString() !== recordId &&
-                        r.trackingId !== recordId
+                      (rr) => rr._id?.toString() !== id && rr.trackingId !== id
                     )
                   );
-                } catch (err) {
-                  alert(err.message || "Delete failed");
+                } catch {
+                  alert("Delete failed.");
                 }
               }}
             />

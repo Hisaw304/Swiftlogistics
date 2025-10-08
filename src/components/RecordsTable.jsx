@@ -72,7 +72,7 @@ export default function RecordsTable({
                 <td className="px-3 py-2 align-top space-x-2">
                   <button
                     className="px-2 py-1 bg-blue-600 text-white text-xs rounded"
-                    onClick={() => onNext(r._id?.toString() || r.trackingId)}
+                    onClick={() => onNext(r._id || r.trackingId)}
                   >
                     Next Stop
                   </button>
@@ -84,9 +84,7 @@ export default function RecordsTable({
                   </button>
                   <button
                     className="px-2 py-1 bg-red-100 text-red-700 text-xs rounded"
-                    onClick={() =>
-                      onDelete && onDelete(r._id?.toString() || r.trackingId)
-                    }
+                    onClick={() => onDelete && onDelete(r._id || r.trackingId)}
                   >
                     Delete
                   </button>
