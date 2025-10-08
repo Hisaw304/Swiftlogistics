@@ -307,6 +307,40 @@ export default async function handler(req, res) {
         .json({ error: "create failed", detail: String(err) });
     }
   }
+  // === PATCH: update existing record ===
+  if (req.method === "PATCH") {
+    const { trackingId, updates } = req.body || {};
+
+    if (!trackingId) {
+      return res.status(400).json({ error: "Missing trackingId" });
+    }
+
+    try {
+      const now = new Date().toISOString();
+      const result = await col.findOneAndUpdate(
+        { trackingId },
+        {
+          $set: {
+            ...(typeof updates === "object" ? updates : {}),
+            updatedAt: now,
+            lastUpdated: now,
+          },
+        },
+        { returnDocument: "after" }
+      );
+
+      if (!result.value) {
+        return res.status(404).json({ error: "Record not found" });
+      }
+
+      return res.status(200).json(result.value);
+    } catch (err) {
+      console.error("Update record error:", err);
+      return res
+        .status(500)
+        .json({ error: "update failed", detail: String(err) });
+    }
+  }
 
   // fallback for other methods
   return res.status(405).json({ error: "Method not allowed" });
