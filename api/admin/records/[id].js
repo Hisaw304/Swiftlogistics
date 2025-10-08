@@ -108,8 +108,25 @@ export default async function handler(req, res) {
   // === PATCH ===
   if (req.method === "PATCH") {
     console.log("✏️ PATCH request received. raw id:", id);
-    const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
 
+    if (!id) {
+      console.error("❌ PATCH: missing id");
+      return res
+        .status(400)
+        .json({ error: "Missing id in request path or query" });
+    }
+
+    // parse body
+    let body;
+    try {
+      body =
+        typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
+    } catch (e) {
+      console.error("❌ PATCH: invalid JSON body", e);
+      return res.status(400).json({ error: "Invalid JSON body" });
+    }
+
+    // allowed fields
     const allowed = [
       "customerName",
       "product",
@@ -119,46 +136,59 @@ export default async function handler(req, res) {
       "originWarehouse",
       "address",
     ];
-
     const set = {};
     allowed.forEach((k) => {
       if (body[k] !== undefined) set[k] = body[k];
     });
 
     if (Object.keys(set).length === 0) {
-      console.log("❌ No valid fields provided");
-      return res.status(400).json({ error: "No valid fields" });
+      console.log("❌ No valid fields provided:", Object.keys(body));
+      return res.status(400).json({ error: "No valid fields to update" });
     }
 
+    // timestamps
     set.updatedAt = new Date().toISOString();
     set.lastUpdated = set.updatedAt;
 
-    // build $or filter to match either _id (ObjectId) or trackingId
+    // build $or clauses (ObjectId or trackingId)
     const orClauses = [{ trackingId: id }];
     try {
       if (ObjectId.isValid(id)) orClauses.unshift({ _id: new ObjectId(id) });
     } catch (e) {
       console.warn("ObjectId construction failed:", e);
     }
-    console.log("➡️ PATCH $or filter:", orClauses);
+    console.log("➡️ PATCH $or filter:", JSON.stringify(orClauses));
+    console.log("➡️ PATCH update payload:", set);
 
-    const updateResult = await col.findOneAndUpdate(
-      { $or: orClauses },
-      { $set: set },
-      { returnDocument: "after" }
-    );
+    // perform update and return AFTER
+    let result;
+    try {
+      result = await col.findOneAndUpdate(
+        { $or: orClauses },
+        { $set: set },
+        { returnDocument: "after" } // returns document after update
+      );
+    } catch (err) {
+      console.error("❌ PATCH: findOneAndUpdate error:", String(err));
+      return res
+        .status(500)
+        .json({ error: "update failed", detail: String(err) });
+    }
 
-    if (!updateResult.value) {
+    if (!result.value) {
       console.log("❌ PATCH: no document matched for id:", id);
       return res.status(404).json({ error: "Not found" });
     }
 
-    console.log(
-      "✅ PATCH updated:",
-      updateResult.value._id || updateResult.value.trackingId
-    );
-    return res.json(updateResult.value);
+    // normalize _id to string for client convenience
+    const updatedDoc = {
+      ...result.value,
+      _id: result.value._id?.toString?.() || result.value._id,
+    };
+    console.log("✅ PATCH updated:", updatedDoc._id || updatedDoc.trackingId);
+    return res.json(updatedDoc);
   }
+
   // === DELETE === (production)
   if (req.method === "DELETE") {
     console.log("🗑 DELETE request. id:", id);
