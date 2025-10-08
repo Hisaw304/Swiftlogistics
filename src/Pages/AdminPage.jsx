@@ -51,15 +51,69 @@ export default function AdminPage() {
 
   async function handleUpdate(idOrTrackingId, payload) {
     const updated = await updateRecord(idOrTrackingId, payload);
+
+    // get normalized id strings for comparison
+    const updatedIdStr =
+      updated._id && updated._id.toString
+        ? updated._id.toString()
+        : String(updated._id);
+    const updatedTrackingId = updated.trackingId;
+
     setRecords((s) =>
-      s.map((r) =>
-        r._id === updated._id || r.trackingId === updated.trackingId
+      s.map((r) => {
+        const rIdStr =
+          r._id && r._id.toString ? r._id.toString() : String(r._id);
+        return rIdStr === updatedIdStr || r.trackingId === updatedTrackingId
           ? updated
-          : r
-      )
+          : r;
+      })
     );
+
     setEditing(null);
     return updated;
+  }
+  async function deleteRecordById(id) {
+    if (!confirm("Delete this record?")) return;
+
+    const idStr = id && id.toString ? id.toString() : String(id);
+
+    try {
+      const res = await fetch(
+        `/api/admin/records/${encodeURIComponent(idStr)}`,
+        {
+          method: "DELETE",
+          headers: { "x-admin-key": adminKey },
+        }
+      );
+
+      if (!res.ok) {
+        // try to show server error
+        let body = null;
+        try {
+          body = await res.json();
+        } catch (e) {
+          body = await res.text().catch(() => null);
+        }
+        throw new Error(body?.error || body || `HTTP ${res.status}`);
+      }
+
+      // only remove from UI after success
+      setRecords((s) =>
+        s.filter(
+          (rr) =>
+            (rr._id && rr._id.toString ? rr._id.toString() : String(rr._id)) !==
+              idStr && rr.trackingId !== idStr
+        )
+      );
+
+      // If you're using a cache/revalidate layer (SWR/react-query), revalidate here:
+      // mutate('/api/admin/records'); // uncomment if using SWR
+    } catch (err) {
+      console.error("Delete failed:", err);
+      alert("Delete failed: " + (err.message || "unknown"));
+      // optional: re-fetch records to resync UI
+      // await refetchRecords();
+    }
   }
 
   async function handleNext(idOrTrackingId) {
@@ -159,22 +213,7 @@ export default function AdminPage() {
               onNext={handleNext}
               onEdit={(r) => setEditing(r)}
               onView={(r) => setViewing(r)}
-              onDelete={async (id) => {
-                if (!confirm("Delete this record?")) return;
-                try {
-                  await fetch(`/api/admin/records/${encodeURIComponent(id)}`, {
-                    method: "DELETE",
-                    headers: { "x-admin-key": adminKey },
-                  });
-                  setRecords((s) =>
-                    s.filter(
-                      (rr) => rr._id?.toString() !== id && rr.trackingId !== id
-                    )
-                  );
-                } catch {
-                  alert("Delete failed.");
-                }
-              }}
+              onDelete={deleteRecordById}
             />
           )}
         </div>
