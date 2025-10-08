@@ -349,7 +349,11 @@ export default function TrackingPage() {
           <div className="bg-white rounded p-3 border">
             <div className="text-xs text-gray-500">Delivery Progress</div>
             <div className="mt-2">
-              <ProgressBar progress={progress} status={status} />
+              <ProgressBar
+                progress={progressPct}
+                status={status}
+                showLabel={true}
+              />
               <div className="text-xs text-gray-400 mt-1">
                 {progress}% • Checkpoint{" "}
                 {Math.min(currentIndex + 1, route.length)} of{" "}

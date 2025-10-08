@@ -116,6 +116,14 @@ export default function AdminForm({
       initial?.image_url ||
       null
   );
+  // derived/route state (paste right after imageUrl state)
+  const [route, setRoute] = useState(initial?.route || []);
+  const [currentIndex, setCurrentIndex] = useState(initial?.currentIndex ?? 0);
+  const [progressPct, setProgressPct] = useState(initial?.progressPct ?? 0);
+  const [currentLocation, setCurrentLocation] = useState(
+    initial?.currentLocation || initial?.origin?.location || null
+  );
+
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
@@ -176,6 +184,21 @@ export default function AdminForm({
           initial.image_url ||
           null
       );
+      // compute derived values from initial and set local derived state
+      const initialDerived = computeDerived({
+        route: initial?.route || [],
+        currentIndex: initial?.currentIndex ?? 0,
+        status: initial?.status || "Pending",
+        shipmentDate: initial?.shipmentDate || null,
+        origin: initial?.origin || null,
+      });
+      setProgressPct(initialDerived.progressPct);
+      setCurrentIndex(initialDerived.currentIndex);
+      setCurrentLocation(initialDerived.currentLocation);
+      if (initialDerived.shipmentDate) {
+        // convert ISO -> YYYY-MM-DD for the date input
+        setShipmentDate(initialDerived.shipmentDate.slice(0, 10));
+      }
     }
   }, [initial]);
 
@@ -188,6 +211,59 @@ export default function AdminForm({
       return { type: "Point", coordinates: [lo, la] };
     }
     return null;
+  }
+  function computeDerived({
+    route = [],
+    currentIndex = 0,
+    status = "Pending",
+    shipmentDate = null,
+    origin = null,
+  }) {
+    const routeArr = Array.isArray(route) ? route : [];
+    let idx = Number.isFinite(Number(currentIndex)) ? Number(currentIndex) : 0;
+    idx = Math.max(0, idx);
+
+    const totalStops = routeArr.length;
+    let progressPct =
+      totalStops > 1 ? Math.round((idx / (totalStops - 1)) * 100) : 0;
+
+    const st = String(status || "Pending")
+      .trim()
+      .toLowerCase();
+
+    const shipmentISO = shipmentDate
+      ? new Date(shipmentDate).toISOString()
+      : null;
+    const nowIso = new Date().toISOString();
+    const computedShipmentDate =
+      st === "shipped" ? shipmentISO || nowIso : shipmentISO;
+
+    if (st === "delivered") {
+      if (Array.isArray(routeArr) && routeArr.length > 0) {
+        idx = Math.max(0, routeArr.length - 1);
+      }
+      progressPct = 100;
+    } else {
+      if (totalStops > 1) {
+        progressPct = Math.round((idx / (totalStops - 1)) * 100);
+      } else {
+        progressPct = progressPct ?? 0;
+      }
+    }
+
+    let currentLocation = null;
+    if (routeArr && routeArr[idx] && routeArr[idx].location) {
+      currentLocation = routeArr[idx].location;
+    } else if (origin && origin.location) {
+      currentLocation = origin.location;
+    }
+
+    return {
+      currentIndex: idx,
+      progressPct,
+      shipmentDate: computedShipmentDate,
+      currentLocation,
+    };
   }
 
   function validateEmail(e) {
@@ -581,7 +657,26 @@ export default function AdminForm({
             <select
               className="p-2 w-full border rounded"
               value={status}
-              onChange={(e) => setStatus(e.target.value)}
+              onChange={(e) => {
+                const newStatus = e.target.value;
+                setStatus(newStatus);
+
+                const d = computeDerived({
+                  route,
+                  currentIndex,
+                  status: newStatus,
+                  shipmentDate, // local YYYY-MM-DD input; computeDerived will convert
+                  origin: initial?.origin || null,
+                });
+
+                // only set if changed (avoids unnecessary state churn)
+                setProgressPct(d.progressPct);
+                if (d.currentIndex !== currentIndex)
+                  setCurrentIndex(d.currentIndex);
+                setCurrentLocation(d.currentLocation || null);
+                if (d.shipmentDate)
+                  setShipmentDate(d.shipmentDate.slice(0, 10));
+              }}
             >
               <option>Pending</option>
               <option>On Hold</option>
