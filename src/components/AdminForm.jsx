@@ -35,6 +35,8 @@ export default function AdminForm({
   const [imageUrl, setImageUrl] = useState(initial?.imageUrl || null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  // inside AdminForm component
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (initial) {
@@ -54,9 +56,8 @@ export default function AdminForm({
   async function submit(e) {
     e.preventDefault();
     setError(null);
-    setLoading(true);
+    setSaving(true);
     try {
-      // deliver address as an object to match backend expectations
       const payload = {
         customerName: customerName || undefined,
         address: {
@@ -69,28 +70,33 @@ export default function AdminForm({
         originWarehouse,
         destination,
         imageUrl,
-        initialStatus,
-        status: initialStatus, // backend expects `initialStatus` on create, `status` on update — keep both if needed
+        status: initialStatus, // ✅ always send correct field name
       };
 
       if (mode === "create") {
         await onCreate(payload);
       } else if (mode === "edit" && onUpdate && initial) {
-        // keep update payload minimal — backend /patch will accept allowed fields
-        await onUpdate(initial._id || initial.trackingId, {
-          customerName: payload.customerName,
-          address: payload.address,
-          product: payload.product,
-          quantity: payload.quantity,
-          originWarehouse: payload.originWarehouse,
-          imageUrl: payload.imageUrl,
-          status: payload.status,
-        });
+        // Keep PATCH minimal — backend accepts these keys
+        const updatePayload = {};
+        for (const key of [
+          "customerName",
+          "address",
+          "product",
+          "quantity",
+          "originWarehouse",
+          "imageUrl",
+          "status",
+        ]) {
+          if (payload[key] !== undefined) updatePayload[key] = payload[key];
+        }
+
+        await onUpdate(initial._id || initial.trackingId, updatePayload);
       }
     } catch (err) {
+      console.error("❌ Save failed:", err);
       setError(err?.message || "Failed");
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   }
 
@@ -188,10 +194,10 @@ export default function AdminForm({
 
         <button
           type="submit"
-          disabled={loading}
+          disabled={saving}
           className="px-4 py-2 bg-blue-600 text-white rounded"
         >
-          {loading ? "Saving..." : mode === "create" ? "Create Record" : "Save"}
+          {saving ? "Saving..." : mode === "create" ? "Create Record" : "Save"}
         </button>
 
         {mode === "edit" && (
