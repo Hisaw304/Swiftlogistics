@@ -219,26 +219,41 @@ export default async function handler(req, res) {
 
       if (!route) {
         try {
-          const genInputOrigin = {
-            lat: origin?.location?.coordinates?.[1],
-            lng: origin?.location?.coordinates?.[0],
-            city: origin?.address?.city || originLabel,
-          };
-          const genInputDest = {
-            lat: destination?.location?.coordinates?.[1],
-            lng: destination?.location?.coordinates?.[0],
-            city: destination?.address?.city || destLabel,
-          };
-          console.log("generateRoute inputs:", genInputOrigin, genInputDest);
-          route = await generateRoute(genInputOrigin, genInputDest);
-          console.log(
-            "generateRoute returned length:",
-            Array.isArray(route) ? route.length : typeof route
-          );
+          // If generateRoute requires an API key, make sure it's present
+          if (!process.env.ORS_API_KEY) {
+            console.warn(
+              "ORS_API_KEY not set — skipping live route generation, using empty route."
+            );
+            route = [];
+          } else {
+            // call generateRoute in a guarded way and ensure it returns an array
+            try {
+              // If your generateRoute is async this will await; if it's sync it will still work.
+              const maybeRoute = await generateRoute(
+                {
+                  lat: origin?.location?.coordinates?.[1],
+                  lng: origin?.location?.coordinates?.[0],
+                  city: origin?.address?.city || originLabel,
+                },
+                {
+                  lat: destination?.location?.coordinates?.[1],
+                  lng: destination?.location?.coordinates?.[0],
+                  city: destination?.address?.city || destLabel,
+                }
+              );
+              route = Array.isArray(maybeRoute) ? maybeRoute : [];
+            } catch (e) {
+              console.warn(
+                "generateRoute threw, falling back to empty route:",
+                String(e)
+              );
+              route = [];
+            }
+          }
         } catch (e) {
           console.warn(
-            "route generation failed:",
-            e && e.stack ? e.stack : String(e)
+            "Unexpected error while attempting route generation:",
+            String(e)
           );
           route = [];
         }
