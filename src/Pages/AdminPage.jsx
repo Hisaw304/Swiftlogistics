@@ -80,20 +80,44 @@ export default function AdminPage() {
     return res.json();
   }
 
+  // AdminPage (or lib/api) — recommended replacement for updateRecordWithKey
   async function updateRecordWithKey(id, payload) {
     const idStr = normalizeId(id);
-    const res = await apiFetch(
-      `/api/admin/records/${encodeURIComponent(idStr)}`,
-      {
-        method: "PATCH",
-        body: JSON.stringify(payload),
-      }
-    );
-    if (!res.ok) {
-      const body = await res.text().catch(() => null);
-      throw new Error(body || `HTTP ${res.status}`);
+    const adminKey =
+      typeof window !== "undefined" ? localStorage.getItem("adminKey") : null;
+    if (!adminKey) throw new Error("Missing admin key");
+
+    const res = await fetch(`/api/admin/records/${encodeURIComponent(idStr)}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        "x-admin-key": adminKey,
+      },
+      body: JSON.stringify(payload),
+      cache: "no-store",
+    });
+
+    let body = null;
+    try {
+      body = await res.json();
+    } catch (e) {
+      // If server returned non-JSON, fall back to text for debugging
+      const txt = await res.text().catch(() => null);
+      throw new Error(txt || `HTTP ${res.status}`);
     }
-    return res.json();
+
+    if (!res.ok) {
+      throw new Error(
+        body?.error || JSON.stringify(body) || `HTTP ${res.status}`
+      );
+    }
+
+    // ensure _id is a string for client code convenience
+    if (body && body._id && typeof body._id !== "string") {
+      body._id = body._id.toString();
+    }
+
+    return body;
   }
 
   async function nextStopWithKey(id) {
