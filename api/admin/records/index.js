@@ -25,7 +25,7 @@ export default async function handler(req, res) {
     // === CORS setup ===
     // NOTE: for debugging this is permissive. Replace '*' with your origin when done.
     const CORS_HEADERS = {
-      "Access-Control-Allow-Origin": "*", // <-- change back to your domain after debugging
+      "Access-Control-Allow-Origin": "https://swiftlogistics-mu.vercel.app",
       "Access-Control-Allow-Methods": "GET,POST,PATCH,DELETE,OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type,x-admin-key",
     };
