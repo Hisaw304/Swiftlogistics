@@ -3,11 +3,11 @@ import { ObjectId } from "mongodb";
 import { connectToDatabase } from "../../shared/mongo.js";
 
 /**
- * Robust admin id handler with clear logs
- * - logs every request (method + url + key)
- * - normalizes common id shapes (trackingId or ObjectId string)
- * - rejects "undefined"/"null" path segments early
- * - implements GET, PATCH, DELETE and responds clearly for other methods
+ * Robust admin id handler with debug diagnostics
+ * - normalizes id (decode + trim)
+ * - rejects "undefined"/"null"
+ * - tries ObjectId, trackingId, and string _id matches
+ * - logs matchingCount & db name before update
  */
 
 const ADMIN = (req) => {
@@ -22,14 +22,16 @@ export default async function handler(req, res) {
     "Access-Control-Allow-Methods": "GET,POST,PATCH,DELETE,OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type,x-admin-key",
   };
-
   Object.entries(CORS_HEADERS).forEach(([k, v]) => res.setHeader(k, v));
   res.setHeader("Cache-Control", "no-store, max-age=0, must-revalidate");
   res.setHeader("Pragma", "no-cache");
   res.setHeader("Content-Type", "application/json");
 
-  // === Quick debug logging (will show in Vercel logs) ===
-  console.log("➡️ /api/admin/records/[id] incoming:", {
+  // Preflight
+  if (req.method === "OPTIONS") return res.status(204).end();
+
+  // Incoming request log
+  console.log("➡️ [id] incoming:", {
     method: req.method,
     url: req.url,
     queryId: req.query?.id,
@@ -41,62 +43,64 @@ export default async function handler(req, res) {
     },
   });
 
-  // Respond to preflight
-  if (req.method === "OPTIONS") {
-    return res.status(204).end();
-  }
-
-  // === Resolve id robustly ===
-  let id;
-  try {
-    if (req.query && req.query.id) id = req.query.id;
-    else {
-      const url = req.url || "";
-      const parts = url.split("/").filter(Boolean);
-      const idx = parts.lastIndexOf("records");
-      if (idx >= 0 && parts.length > idx + 1) {
-        id = parts
-          .slice(idx + 1)
-          .join("/")
-          .split("?")[0];
-      } else if (parts.length) {
-        id = parts[parts.length - 1].split("?")[0];
-      }
-    }
-  } catch (e) {
-    console.warn("⚠️ id resolution failed:", e);
-    id = undefined;
-  }
-
-  // sanitize obviously invalid id strings
-  if (id === "undefined" || id === "null" || id === "" || id === null) {
-    id = undefined;
-  }
-
-  console.log("➡️ resolved id:", id);
-
-  // === Auth check ===
+  // === Auth ===
   if (!ADMIN(req)) {
     console.log("🔴 Unauthorized admin key:", req.headers["x-admin-key"]);
     return res.status(401).json({ error: "Unauthorized" });
   }
 
-  // === DB connection ===
+  // === Resolve id robustly ===
+  let rawId;
+  try {
+    if (req.query && req.query.id) rawId = req.query.id;
+    else {
+      const url = req.url || "";
+      const parts = url.split("/").filter(Boolean);
+      const idx = parts.lastIndexOf("records");
+      if (idx >= 0 && parts.length > idx + 1) {
+        rawId = parts
+          .slice(idx + 1)
+          .join("/")
+          .split("?")[0];
+      } else if (parts.length) {
+        rawId = parts[parts.length - 1].split("?")[0];
+      }
+    }
+  } catch (e) {
+    console.warn("⚠️ id resolution error:", e);
+    rawId = undefined;
+  }
+
+  const idCandidate = rawId
+    ? decodeURIComponent(String(rawId)).trim()
+    : undefined;
+  const id =
+    idCandidate &&
+    idCandidate !== "undefined" &&
+    idCandidate !== "null" &&
+    idCandidate !== ""
+      ? idCandidate
+      : undefined;
+
+  console.log("➡️ resolved id:", id);
+
+  // === DB connect ===
   const { db } = await connectToDatabase();
   const col = db.collection("trackings");
 
-  // === Helper for filters ===
-  const buildFilters = (rawId) => {
-    const filters = [];
+  // Helper to build robust $or filters
+  const buildFilters = (raw) => {
+    const ors = [];
     try {
-      if (rawId && ObjectId.isValid(rawId)) {
-        filters.push({ _id: new ObjectId(rawId) });
-      }
+      if (raw && ObjectId.isValid(raw)) ors.push({ _id: new ObjectId(raw) });
     } catch (e) {
       console.warn("⚠️ ObjectId check failed:", e);
     }
-    if (rawId) filters.push({ trackingId: rawId });
-    return filters;
+    if (raw) {
+      ors.push({ trackingId: raw }); // primary string trackingId
+      ors.push({ _id: raw }); // fallback in case _id was stored as string
+    }
+    return ors;
   };
 
   // === GET ===
@@ -115,7 +119,6 @@ export default async function handler(req, res) {
 
   // === PATCH ===
   if (req.method === "PATCH") {
-    console.log("✏️ PATCH start. id:", id);
     if (!id) {
       return res.status(400).json({ error: "Missing id in path or query" });
     }
@@ -126,9 +129,7 @@ export default async function handler(req, res) {
       if (typeof req.body === "string") bodyRaw = req.body;
       else if (req.body && Object.keys(req.body).length)
         bodyRaw = JSON.stringify(req.body);
-      else {
-        for await (const chunk of req) bodyRaw += chunk;
-      }
+      else for await (const chunk of req) bodyRaw += chunk;
     } catch (e) {
       console.error("❌ Error reading body:", e);
     }
@@ -163,20 +164,29 @@ export default async function handler(req, res) {
     set.updatedAt = new Date().toISOString();
     set.lastUpdated = set.updatedAt;
 
-    const orClauses = [{ trackingId: id }];
-    try {
-      if (ObjectId.isValid(id)) orClauses.unshift({ _id: new ObjectId(id) });
-    } catch (e) {
-      console.warn("⚠️ ObjectId construction failed:", e);
-    }
-
+    const orClauses = buildFilters(id);
     console.log(
-      "➡️ PATCH trying filters:",
+      "➡️ PATCH filters:",
       JSON.stringify(orClauses),
-      "payload:",
-      set
+      "payloadKeys:",
+      Object.keys(set)
     );
 
+    // Debug: how many docs match before update, and which DB
+    let matchingCount = -1;
+    try {
+      matchingCount = await col
+        .countDocuments({ $or: orClauses })
+        .catch((e) => {
+          console.error("countDocuments error:", String(e));
+          return -1;
+        });
+      console.log("🔎 matchingCount:", matchingCount, "db:", db.databaseName);
+    } catch (e) {
+      console.error("🔎 Debug count failed:", String(e));
+    }
+
+    // Attempt update
     let result;
     try {
       result = await col.findOneAndUpdate(
@@ -216,11 +226,7 @@ export default async function handler(req, res) {
     if (!id)
       return res.status(400).json({ error: "Missing id in path or query" });
 
-    const orClauses = [{ trackingId: id }];
-    try {
-      if (ObjectId.isValid(id)) orClauses.unshift({ _id: new ObjectId(id) });
-    } catch (e) {}
-
+    const orClauses = buildFilters(id);
     try {
       const delResult = await col.deleteOne({ $or: orClauses });
       return res.json({
@@ -236,6 +242,6 @@ export default async function handler(req, res) {
     }
   }
 
-  console.log("⚠️ Method not allowed reached:", req.method);
+  console.log("⚠️ Method not allowed:", req.method);
   return res.status(405).json({ error: "Method not allowed" });
 }
