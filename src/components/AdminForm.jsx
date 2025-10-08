@@ -1,4 +1,3 @@
-// src/components/AdminForm.jsx
 import React, { useState, useEffect } from "react";
 import ImageUploader from "./ImageUploader";
 
@@ -11,6 +10,10 @@ import ImageUploader from "./ImageUploader";
     - onCancel (optional)
 */
 
+function hasAnyAddressField(addr) {
+  return !!(addr && (addr.full || addr.city || addr.zip));
+}
+
 export default function AdminForm({
   onCreate,
   onUpdate,
@@ -18,7 +21,6 @@ export default function AdminForm({
   mode = "create",
   onCancel,
 }) {
-  // use the same names the backend uses: customerName, address:{ full, city, zip }
   const [customerName, setCustomerName] = useState(initial?.customerName || "");
   const [addressFull, setAddressFull] = useState(initial?.address?.full || "");
   const [city, setCity] = useState(initial?.address?.city || "");
@@ -29,14 +31,10 @@ export default function AdminForm({
     initial?.originWarehouse || "Los Angeles, CA"
   );
   const [destination, setDestination] = useState(initial?.destination || "");
-  const [initialStatus, setInitialStatus] = useState(
-    initial?.status || "Pending"
-  );
+  const [status, setStatus] = useState(initial?.status || "Pending");
   const [imageUrl, setImageUrl] = useState(initial?.imageUrl || null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  // inside AdminForm component
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     if (initial) {
@@ -48,52 +46,64 @@ export default function AdminForm({
       setQuantity(initial.quantity ?? 1);
       setOriginWarehouse(initial.originWarehouse || "Los Angeles, CA");
       setDestination(initial.destination || "");
-      setInitialStatus(initial.status || "Pending");
+      setStatus(initial.status || "Pending");
       setImageUrl(initial.imageUrl || null);
     }
   }, [initial]);
+
+  // safe stringify id helper
+  function safeIdFromInitial(init) {
+    if (!init) return null;
+    if (init.trackingId) return String(init.trackingId);
+    if (init._id) return String(init._id);
+    if (init.id) return String(init.id);
+    return null;
+  }
 
   async function submit(e) {
     e.preventDefault();
     setError(null);
     setSaving(true);
+
     try {
-      const payload = {
-        customerName: customerName || undefined,
-        address: {
-          full: addressFull || undefined,
-          city: city || undefined,
-          zip: zip || undefined,
-        },
-        product,
-        quantity,
-        originWarehouse,
-        destination,
-        imageUrl,
-        status: initialStatus, // ✅ always send correct field name
-      };
+      // Build payload minimally (don't include undefined fields)
+      const payload = {};
+      if (customerName) payload.customerName = customerName;
+      if (hasAnyAddressField({ full: addressFull, city, zip })) {
+        const addr = {};
+        if (addressFull) addr.full = addressFull;
+        if (city) addr.city = city;
+        if (zip) addr.zip = zip;
+        payload.address = addr;
+      }
+      if (product) payload.product = product;
+      if (quantity !== undefined && quantity !== null)
+        payload.quantity = Number(quantity);
+      if (originWarehouse) payload.originWarehouse = originWarehouse;
+      if (imageUrl) payload.imageUrl = imageUrl;
+      if (status) payload.status = status;
+      if (destination) payload.destination = destination;
 
       if (mode === "create") {
         await onCreate(payload);
       } else if (mode === "edit" && onUpdate && initial) {
-        // Keep PATCH minimal — backend accepts these keys
-        const updatePayload = {};
-        for (const key of [
-          "customerName",
-          "address",
-          "product",
-          "quantity",
-          "originWarehouse",
-          "imageUrl",
-          "status",
-        ]) {
-          if (payload[key] !== undefined) updatePayload[key] = payload[key];
+        // robust id: prefer trackingId, fall back to _id or id
+        const idToSend = safeIdFromInitial(initial);
+
+        // Debug: log what we will send (remove in production)
+        console.log("AdminForm: update call:", { idToSend, payload, initial });
+
+        if (!idToSend) {
+          throw new Error(
+            "Missing record id: trackingId or _id required for update"
+          );
         }
 
-        await onUpdate(initial.trackingId, updatePayload);
+        // Call parent's onUpdate with a clean id string
+        await onUpdate(idToSend, payload);
       }
     } catch (err) {
-      console.error("❌ Save failed:", err);
+      console.error("❌ Save failed (AdminForm):", err);
       setError(err?.message || "Failed");
     } finally {
       setSaving(false);
@@ -180,8 +190,8 @@ export default function AdminForm({
 
       <div className="flex items-center gap-2">
         <select
-          value={initialStatus}
-          onChange={(e) => setInitialStatus(e.target.value)}
+          value={status}
+          onChange={(e) => setStatus(e.target.value)}
           className="p-2 border rounded text-sm"
         >
           <option>Pending</option>

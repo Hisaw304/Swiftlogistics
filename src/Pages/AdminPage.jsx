@@ -1,43 +1,28 @@
-// src/pages/AdminPage.jsx  (or wherever AdminPage lives) — replace with this full file
 import React, { useEffect, useState } from "react";
 import AdminForm from "../components/AdminForm";
 import RecordsTable from "../components/RecordsTable";
 import TrackingModal from "../components/TrackingModal";
 
-// helper: normalize ObjectId or string to a string
 function normalizeId(id) {
-  if (id == null) return String(id);
-  try {
-    return typeof id === "object" && typeof id.toString === "function"
-      ? id.toString()
-      : String(id);
-  } catch {
-    return String(id);
-  }
+  if (!id) return null;
+  if (typeof id === "object" && typeof id.toString === "function")
+    return id.toString();
+  return String(id);
 }
 
 export default function AdminPage() {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [adminKey, setAdminKey] = useState(() => {
-    try {
-      return localStorage.getItem("adminKey") || "";
-    } catch {
-      return "";
-    }
-  });
+  const [adminKey, setAdminKey] = useState(() =>
+    typeof window !== "undefined" ? localStorage.getItem("adminKey") || "" : ""
+  );
   const [editing, setEditing] = useState(null);
   const [viewing, setViewing] = useState(null);
   const [error, setError] = useState(null);
 
-  // load records when adminKey changes (or on demand)
   useEffect(() => {
-    if (adminKey) {
-      loadRecords();
-    } else {
-      setRecords([]);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (adminKey) loadRecords();
+    else setRecords([]);
   }, [adminKey]);
 
   function saveAdminKey(key) {
@@ -47,13 +32,13 @@ export default function AdminPage() {
     setAdminKey(key);
   }
 
-  // ---------- API helpers that always include adminKey ----------
+  // central fetch that always attaches adminKey from state
   async function apiFetch(path, opts = {}) {
     const headers = (opts.headers = opts.headers || {});
     headers["x-admin-key"] = adminKey || "";
-    if (!headers["Content-Type"] && opts.body)
+    if (!headers["Content-Type"] && opts.body) {
       headers["Content-Type"] = "application/json";
-    // enforce fresh fetches for admin endpoints
+    }
     const res = await fetch(path, { cache: "no-store", ...opts });
     return res;
   }
@@ -62,8 +47,8 @@ export default function AdminPage() {
     const q = `?page=${page}&limit=${limit}`;
     const res = await apiFetch(`/api/admin/records${q}`, { method: "GET" });
     if (!res.ok) {
-      const body = await res.text().catch(() => null);
-      throw new Error(body || `HTTP ${res.status}`);
+      const txt = await res.text().catch(() => null);
+      throw new Error(txt || `HTTP ${res.status}`);
     }
     return res.json();
   }
@@ -74,27 +59,26 @@ export default function AdminPage() {
       body: JSON.stringify(payload),
     });
     if (!res.ok) {
-      const body = await res.text().catch(() => null);
-      throw new Error(body || `HTTP ${res.status}`);
+      const txt = await res.text().catch(() => null);
+      throw new Error(txt || `HTTP ${res.status}`);
     }
     return res.json();
   }
 
   async function updateRecordWithKey(id, payload) {
-    const idStr = String(id); // ✅ always use trackingId directly
-    const adminKey =
-      typeof window !== "undefined" ? localStorage.getItem("adminKey") : null;
-    if (!adminKey) throw new Error("Missing admin key");
+    const idStr = normalizeId(id);
+    if (!idStr) throw new Error("Missing record id");
 
-    const res = await fetch(`/api/admin/records/${encodeURIComponent(idStr)}`, {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        "x-admin-key": adminKey,
-      },
-      body: JSON.stringify(payload),
-      cache: "no-store",
-    });
+    // Debug: log outgoing request on client
+    console.log("▶️ updateRecordWithKey ->", { id: idStr, payload });
+
+    const res = await apiFetch(
+      `/api/admin/records/${encodeURIComponent(idStr)}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      }
+    );
 
     let body = null;
     try {
@@ -113,34 +97,56 @@ export default function AdminPage() {
     if (body && body._id && typeof body._id !== "string") {
       body._id = body._id.toString();
     }
-
     return body;
   }
 
   async function nextStopWithKey(id) {
     const idStr = normalizeId(id);
-    // if you have a separate endpoint for next stop, adapt the path; fallback to PATCH-like behavior:
+    if (!idStr) throw new Error("Missing record id");
     const res = await apiFetch(
       `/api/admin/records/${encodeURIComponent(idStr)}/next`,
       {
         method: "POST",
       }
     );
-    // If your API doesn't have /next POST, you might call a PATCH — adjust accordingly.
     if (!res.ok) {
-      const body = await res.text().catch(() => null);
-      throw new Error(body || `HTTP ${res.status}`);
+      const txt = await res.text().catch(() => null);
+      throw new Error(txt || `HTTP ${res.status}`);
     }
     return res.json();
   }
 
-  // ---------- UI-level helpers ----------
+  async function deleteRecordById(id) {
+    if (!confirm("Delete this record?")) return;
+    const idStr = normalizeId(id);
+    if (!idStr) {
+      alert("Missing id");
+      return;
+    }
+    const res = await apiFetch(
+      `/api/admin/records/${encodeURIComponent(idStr)}`,
+      {
+        method: "DELETE",
+      }
+    );
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      throw new Error(
+        (body && (body.error || JSON.stringify(body))) || `HTTP ${res.status}`
+      );
+    }
+    // refresh
+    await loadRecords();
+  }
+
   async function loadRecords() {
     setLoading(true);
     setError(null);
     try {
-      const json = await fetchRecordsWithKey({ limit: 200 });
-      setRecords(Array.isArray(json.items) ? json.items : json.items || []);
+      const json = await fetchRecordsWithKey();
+      setRecords(
+        Array.isArray(json.items) ? json.items : json.items || json || []
+      );
     } catch (err) {
       setError(err.message || "Failed to load records.");
     } finally {
@@ -150,7 +156,6 @@ export default function AdminPage() {
 
   async function handleCreate(payload) {
     const created = await createRecordWithKey(payload);
-    // normalize created._id
     const createdSafe = { ...created, _id: normalizeId(created._id) };
     setRecords((s) => [createdSafe, ...s]);
     return created;
@@ -158,140 +163,43 @@ export default function AdminPage() {
 
   async function handleUpdate(idOrTrackingId, payload) {
     const updated = await updateRecordWithKey(idOrTrackingId, payload);
-
     const updatedIdStr = normalizeId(updated._id);
     const updatedTrackingId = updated.trackingId;
 
     setRecords((s) =>
-      s.map((r) => {
-        const rIdStr = normalizeId(r._id);
-        return rIdStr === updatedIdStr || r.trackingId === updatedTrackingId
+      s.map((r) =>
+        normalizeId(r._id) === updatedIdStr ||
+        r.trackingId === updatedTrackingId
           ? updated
-          : r;
-      })
+          : r
+      )
     );
-
     setEditing(null);
     return updated;
   }
-  async function deleteRecordById(id) {
-    if (!confirm("Delete this record?")) return;
-    const idStr = normalizeId(id);
-    if (!adminKey) {
-      alert("Missing admin key");
-      return;
-    }
-
-    // helper to call delete and return parsed body
-    async function callDelete(idToDelete) {
-      const res = await fetch(
-        `/api/admin/records/${encodeURIComponent(idToDelete)}`,
-        {
-          method: "DELETE",
-          headers: { "x-admin-key": adminKey },
-          cache: "no-store",
-        }
-      );
-      let body = null;
-      try {
-        body = await res.json();
-      } catch (e) {
-        body = null;
-      }
-      return { res, body };
-    }
-
-    try {
-      console.log("Deleting id:", idStr);
-      const { res, body } = await callDelete(idStr);
-
-      if (!res.ok) {
-        throw new Error(
-          (body && (body.error || JSON.stringify(body))) || `HTTP ${res.status}`
-        );
-      }
-
-      // If deletedCount reported 1 => success
-      if (
-        body &&
-        typeof body.deletedCount !== "undefined" &&
-        body.deletedCount > 0
-      ) {
-        await loadRecords(); // refresh list
-        return;
-      }
-
-      // deletedCount is 0 (or server didn't provide it). Try fallback id from current records:
-      console.warn("Server reported deletedCount 0, attempting fallback id...");
-
-      // Find the record in current records to get its alternate id
-      const found = records.find(
-        (r) => normalizeId(r._id) === idStr || r.trackingId === idStr
-      );
-      const altId = found
-        ? normalizeId(found._id) === idStr
-          ? found.trackingId
-          : normalizeId(found._id)
-        : null;
-
-      if (altId) {
-        console.log("Trying fallback delete id:", altId);
-        const { res: res2, body: body2 } = await callDelete(altId);
-        if (!res2.ok) {
-          throw new Error(
-            (body2 && (body2.error || JSON.stringify(body2))) ||
-              `HTTP ${res2.status}`
-          );
-        }
-        if (
-          body2 &&
-          typeof body2.deletedCount !== "undefined" &&
-          body2.deletedCount > 0
-        ) {
-          await loadRecords();
-          return;
-        }
-      }
-
-      // If we get here no deletion happened
-      await loadRecords(); // resync
-      throw new Error("Delete did not remove any document.");
-    } catch (err) {
-      console.error("Delete failed:", err);
-      alert("Delete failed: " + (err.message || "unknown"));
-    }
-  }
 
   async function handleNext(idOrTrackingId) {
-    try {
-      const updated = await nextStopWithKey(idOrTrackingId);
+    const updated = await nextStopWithKey(idOrTrackingId);
+    const updatedIdStr = normalizeId(updated._id);
+    const updatedTrackingId = updated.trackingId;
 
-      const updatedIdStr = normalizeId(updated._id);
-      const updatedTrackingId = updated.trackingId;
-
-      setRecords((s) =>
-        s.map((r) => {
-          const rIdStr = normalizeId(r._id);
-          return rIdStr === updatedIdStr || r.trackingId === updatedTrackingId
-            ? updated
-            : r;
-        })
-      );
-
-      return updated;
-    } catch (err) {
-      alert(err.message || "Failed to advance.");
-    }
+    setRecords((s) =>
+      s.map((r) =>
+        normalizeId(r._id) === updatedIdStr ||
+        r.trackingId === updatedTrackingId
+          ? updated
+          : r
+      )
+    );
+    return updated;
   }
 
-  // render
   return (
     <div className="max-w-6xl mx-auto py-10 px-4">
       <h1 className="text-3xl font-bold mb-6 text-gray-800">
         Admin Panel — Tracking Records
       </h1>
 
-      {/* Admin key section */}
       <div className="mb-6">
         <label className="text-sm text-gray-600 font-medium">
           Type your Admin Key below
@@ -312,7 +220,9 @@ export default function AdminPage() {
           <button
             className="px-4 py-2 bg-gray-200 text-gray-700 rounded"
             onClick={() => {
-              localStorage.removeItem("adminKey");
+              try {
+                localStorage.removeItem("adminKey");
+              } catch {}
               setAdminKey("");
               setRecords([]);
             }}
@@ -334,7 +244,6 @@ export default function AdminPage() {
         )}
       </div>
 
-      {/* Content grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-1">
           <h2 className="text-lg font-semibold mb-3 text-gray-700">
@@ -364,7 +273,14 @@ export default function AdminPage() {
             <RecordsTable
               records={records}
               onNext={handleNext}
-              onEdit={(r) => setEditing(r)}
+              onEdit={(r) =>
+                setEditing({
+                  ...r,
+                  // ensure editing always has a string id available:
+                  trackingId:
+                    r.trackingId ?? (r._id ? String(r._id) : undefined),
+                })
+              }
               onView={(r) => setViewing(r)}
               onDelete={deleteRecordById}
             />
@@ -372,18 +288,16 @@ export default function AdminPage() {
         </div>
       </div>
 
-      {/* View Modal */}
       {viewing && (
         <TrackingModal record={viewing} onClose={() => setViewing(null)} />
       )}
 
-      {/* Edit Modal */}
       {editing && (
         <div className="fixed inset-0 flex items-center justify-center z-50 bg-black/40">
           <div className="w-full max-w-2xl bg-white p-4 rounded-lg shadow">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold text-gray-700">
-                Edit Record — {editing.trackingId}
+                Edit Record — {editing.trackingId ?? normalizeId(editing._id)}
               </h3>
               <button
                 className="text-sm text-gray-600"
