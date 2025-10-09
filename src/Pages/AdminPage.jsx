@@ -215,7 +215,6 @@ export default function AdminPage() {
 
   async function handleNext(idOrTrackingId) {
     try {
-      // 🧭 Add this line here:
       console.log("🧭 handleNext called with:", idOrTrackingId);
 
       // Find the record locally first
@@ -224,19 +223,38 @@ export default function AdminPage() {
           r.trackingId === idOrTrackingId ||
           String(r._id) === String(idOrTrackingId)
       );
-      if (!record) throw new Error("Record not found");
+      if (!record) throw new Error("Record not found locally");
 
       console.log("✅ Found record:", record.trackingId, record._id);
 
-      // Increment its currentIndex
-      const nextIndex = (record.currentIndex ?? 0) + 1;
+      const id = encodeURIComponent(record.trackingId || String(record._id));
 
-      // Send the PATCH update (this hits your working /api/admin/records route)
-      const updated = await updateRecordWithKey(record.trackingId, {
-        currentIndex: nextIndex,
+      const ADMIN_KEY =
+        typeof window !== "undefined" ? localStorage.getItem("adminKey") : null;
+      if (!ADMIN_KEY) throw new Error("Missing admin key");
+
+      // call the /next endpoint that you deployed
+      const res = await fetch(`/api/admin/records/${id}/next`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-key": ADMIN_KEY,
+        },
+        cache: "no-store",
       });
 
-      // Update local UI state
+      const body = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        throw new Error(
+          body?.error || JSON.stringify(body) || `HTTP ${res.status}`
+        );
+      }
+
+      // server returns the updated document
+      const updated = body;
+
+      // update UI state
       setRecords((prev) =>
         prev.map((r) => (r.trackingId === record.trackingId ? updated : r))
       );
@@ -245,7 +263,7 @@ export default function AdminPage() {
       return updated;
     } catch (err) {
       console.error("❌ Update failed (handleNext):", err);
-      alert("Failed to move to next stop.");
+      alert("Failed to move to next stop: " + (err.message || String(err)));
     }
   }
 
