@@ -92,12 +92,39 @@ export default function TrackingPage() {
   };
 
   // Use polite polling: polls in background, pauses on tab hide, exponential backoff on error.
-  const {
-    loading: pollingLoading,
-    error: pollingError,
-    data: polledData,
-    refresh,
-  } = usePolitePolling(fetchTracking, { interval: 15000, immediate: true });
+  // const {
+  //   loading: pollingLoading,
+  //   error: pollingError,
+  //   data: polledData,
+  //   refresh,
+  // } = usePolitePolling(fetchTracking, { interval: 15000, immediate: true });
+  // Temporary: perform a single fetch once (disable polling while we fix DB)
+  const [pollingLoading, setPollingLoading] = useState(false);
+  const [pollingError, setPollingError] = useState(null);
+  const [polledData, setPolledData] = useState(null);
+
+  useEffect(() => {
+    let alive = true;
+    async function loadOnce() {
+      if (!id) return;
+      setPollingLoading(true);
+      setPollingError(null);
+      try {
+        const data = await fetchTracking();
+        if (!alive) return;
+        setPolledData(data);
+      } catch (err) {
+        if (!alive) return;
+        setPollingError(err);
+      } finally {
+        if (alive) setPollingLoading(false);
+      }
+    }
+    loadOnce();
+    return () => {
+      alive = false;
+    };
+  }, [id]); // re-run when id changes
 
   // Keep initial "no id" behavior: if no id, show message
   useEffect(() => {
