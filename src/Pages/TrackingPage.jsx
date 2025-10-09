@@ -14,6 +14,8 @@ import {
 import ProgressBar from "../components/ProgressBar";
 import RouteTimeline from "../components/RouteTimeline";
 import RouteMap from "../components/RouteMap";
+import usePolitePolling from "../hooks/usePolitePolling"; // <-- new
+
 const statusInfo = {
   pending: {
     text: "⏳ Your order is being processed and will ship soon.",
@@ -47,119 +49,159 @@ const statusInfo = {
 export default function TrackingPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+
   const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(Boolean(id));
-  const [error, setError] = useState(null);
   const [imgError, setImgError] = useState(false);
   const [prevLocation, setPrevLocation] = useState(null); // previous location for animation
-  const POLL_INTERVAL_MS = 10000; // 10s polling (tune as needed)
+  const [showAll, setShowAll] = useState(false);
 
-  // small fetch helper with timeout
+  // small fetch helper with timeout (kept from your original)
   async function fetchWithTimeout(url, options = {}, timeout = 12000) {
     const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), timeout);
+    const idt = setTimeout(() => controller.abort(), timeout);
     try {
       const res = await fetch(url, { ...options, signal: controller.signal });
-      clearTimeout(id);
+      clearTimeout(idt);
       return res;
     } catch (err) {
-      clearTimeout(id);
+      clearTimeout(idt);
       throw err;
     }
   }
 
+  // fetch function used by polite polling hook
+  const fetchTracking = async () => {
+    if (!id) throw new Error("Missing tracking id");
+    const res = await fetchWithTimeout(
+      `/api/public/track?trackingId=${encodeURIComponent(id)}`,
+      { headers: { Accept: "application/json" } },
+      12000
+    );
+
+    if (!res.ok) {
+      const txt = await res.text().catch(() => "");
+      let parsed = null;
+      try {
+        parsed = txt ? JSON.parse(txt) : null;
+      } catch (e) {
+        parsed = null;
+      }
+      throw new Error(parsed?.error || `HTTP ${res.status}`);
+    }
+    return res.json();
+  };
+
+  // Use polite polling: polls in background, pauses on tab hide, exponential backoff on error.
+  const {
+    loading: pollingLoading,
+    error: pollingError,
+    data: polledData,
+    refresh,
+  } = usePolitePolling(fetchTracking, { interval: 15000, immediate: true });
+
+  // Keep initial "no id" behavior: if no id, show message
   useEffect(() => {
     if (!id) {
-      setLoading(false);
-      setError("No tracking ID provided.");
       setData(null);
-      return;
+      setPrevLocation(null);
     }
+    // when id changes, we clear previous data so UI resets while polling fetches new
+  }, [id]);
 
-    let alive = true;
-    let intervalId = null;
+  // When new polled data arrives, detect prevLocation and set data
+  useEffect(() => {
+    if (!polledData) return;
 
-    async function doFetch() {
-      try {
-        if (alive) setLoading(true);
-        setError(null);
-        const res = await fetchWithTimeout(
-          `/api/public/track?trackingId=${encodeURIComponent(id)}`,
-          { headers: { Accept: "application/json" } },
-          12000
-        );
-        if (!res.ok) {
-          const txt = await res.text().catch(() => "");
-          let parsed = null;
-          try {
-            parsed = txt ? JSON.parse(txt) : null;
-          } catch (e) {
-            parsed = null;
-          }
-          throw new Error(parsed?.error || `HTTP ${res.status}`);
+    // If we already have a data.currentLocation and the new payload has a different currentLocation,
+    // move the previous to prevLocation so map can animate smoothly.
+    try {
+      const oldLoc = data?.currentLocation || null;
+      const newLoc = polledData?.currentLocation || null;
+
+      // helper to produce [lat, lng] tuple for comparison
+      const coordsOf = (c) => {
+        if (!c) return null;
+        // Array assumed [lng, lat] or [lat, lng] — try heuristics
+        if (Array.isArray(c) && c.length >= 2) {
+          const a = Number(c[0]);
+          const b = Number(c[1]);
+          // heuristic: if first value is in lat range, treat as [lat,lng]
+          if (a >= -90 && a <= 90 && b >= -180 && b <= 180) return [a, b];
+          // otherwise treat as [lng,lat]
+          return [Number(c[1]), Number(c[0])];
         }
-        const json = await res.json();
-
-        if (!alive) return;
-
-        // If we already have a data.currentLocation and the new payload has a different currentLocation,
-        // move the previous to prevLocation so map can animate smoothly.
-        try {
-          const oldLoc = data?.currentLocation || null;
-          const newLoc = json?.currentLocation || null;
-
-          // helper to compare basic coordinates (works for GeoJSON Point or [lng,lat] arrays)
-          const coordsOf = (c) => {
-            if (!c) return null;
-            if (Array.isArray(c) && c.length >= 2)
-              return [Number(c[1]), Number(c[0])];
-            if (c.type === "Point" && Array.isArray(c.coordinates))
-              return [Number(c.coordinates[1]), Number(c.coordinates[0])];
-            if (typeof c.lat === "number" && typeof c.lng === "number")
-              return [Number(c.lat), Number(c.lng)];
-            return null;
-          };
-
-          const oc = coordsOf(oldLoc);
-          const nc = coordsOf(newLoc);
-          if (oc && nc && (oc[0] !== nc[0] || oc[1] !== nc[1])) {
-            setPrevLocation(oldLoc);
-          } else if (!oc && nc) {
-            // initial load — prev stays null
-            setPrevLocation(null);
-          }
-        } catch (e) {
-          // ignore compare errors
+        if (c && c.type === "Point" && Array.isArray(c.coordinates)) {
+          const [lng, lat] = c.coordinates;
+          return [Number(lat), Number(lng)];
         }
+        if (c && typeof c.lat === "number" && typeof c.lng === "number") {
+          return [Number(c.lat), Number(c.lng)];
+        }
+        return null;
+      };
 
-        setData(json || null);
-      } catch (err) {
-        if (err.name === "AbortError") return;
-        // On network / transient error we keep showing last data but surface a message
-        setError(err.message || "Failed to load tracking data.");
-      } finally {
-        if (alive) setLoading(false);
+      const oc = coordsOf(oldLoc);
+      const nc = coordsOf(newLoc);
+
+      if (oc && nc && (oc[0] !== nc[0] || oc[1] !== nc[1])) {
+        setPrevLocation(oldLoc);
+      } else if (!oc && nc) {
+        // initial load — prev stays null
+        setPrevLocation(null);
       }
+    } catch (e) {
+      // ignore compare errors
     }
 
-    // initial fetch
-    doFetch();
+    setData(polledData || null);
+  }, [polledData]); // intentionally depends only on polledData
 
-    // polling
-    intervalId = setInterval(() => {
-      doFetch();
-    }, POLL_INTERVAL_MS);
-
-    return () => {
-      alive = false;
-      if (intervalId) clearInterval(intervalId);
-    };
-  }, [id]); // intentionally only re-run when id changes
-
-  // defensive data access
+  // derive commonly used vars (defensive)
   const route = Array.isArray(data?.route) ? data.route : [];
   const currentIndex =
     typeof data?.currentIndex === "number" ? data.currentIndex : 0;
+  // compute a trimmed route view and mapped index for the map/timeline
+  const { windowed, mappedIndex, isWindowed } = computeWindowedRoute(
+    route,
+    currentIndex,
+    2
+  ); // windowSize=2 (tweak)
+  const routeToRender = showAll ? route : windowed;
+  const indexForRender = showAll ? currentIndex : mappedIndex;
+
+  // ---------- start windowing helper (paste here, inside TrackingPage) ----------
+  function computeWindowedRoute(route = [], currentIndex = 0, windowSize = 2) {
+    // keep origin and destination always
+    if (!Array.isArray(route) || route.length === 0)
+      return { windowed: [], mappedIndex: 0 };
+
+    const total = route.length;
+    const origin = route[0];
+    const dest = route[total - 1];
+
+    // clamp currentIndex
+    const idx = Math.max(0, Math.min(total - 1, Number(currentIndex) || 0));
+
+    // if route is small, return as-is
+    if (total <= 7)
+      return { windowed: route, mappedIndex: idx, isWindowed: false };
+
+    // pick window around currentIndex (N before, N after)
+    const start = Math.max(1, idx - windowSize);
+    const end = Math.min(total - 2, idx + windowSize);
+
+    // compose: origin + middle slice + dest
+    const middle = route.slice(start, end + 1);
+    const windowed = [origin, ...middle, dest];
+
+    // map original currentIndex to new index in windowed array
+    // origin maps to 0; original index 'start' maps to 1, etc.
+    const mappedIndex =
+      idx <= 0 ? 0 : idx >= total - 1 ? windowed.length - 1 : 1 + (idx - start);
+
+    return { windowed, mappedIndex, isWindowed: true, start, end, total, idx };
+  }
+  // ---------- end windowing helper ----------
 
   const progress = useMemo(() => {
     if (typeof data?.progressPct === "number") return data.progressPct;
@@ -186,12 +228,10 @@ export default function TrackingPage() {
       return new Date(iso).toLocaleString();
     }
   };
-  // place somewhere near formatTime helper
+
   const formatLocation = (loc) => {
     if (!loc) return "—";
-    // already a string
     if (typeof loc === "string") return loc;
-    // array [lng, lat]
     if (Array.isArray(loc)) {
       if (
         loc.length >= 2 &&
@@ -201,21 +241,19 @@ export default function TrackingPage() {
         return `${loc[1].toFixed(4)}, ${loc[0].toFixed(4)}`;
       return JSON.stringify(loc);
     }
-    // GeoJSON Point: { type: "Point", coordinates: [lng, lat] }
     if (loc.type === "Point" && Array.isArray(loc.coordinates)) {
       const [lng, lat] = loc.coordinates;
       return `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
     }
-    // lat/lng fields
     if (typeof loc.lat === "number" && typeof loc.lng === "number")
       return `${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)}`;
-    // fallback
     try {
       return JSON.stringify(loc);
     } catch {
       return "—";
     }
   };
+
   const normalizePoint = (loc) => {
     if (!loc) return null;
     if (Array.isArray(loc) && loc.length >= 2) {
@@ -238,7 +276,6 @@ export default function TrackingPage() {
   const copyId = async () => {
     try {
       await navigator.clipboard.writeText(id || "");
-      // small visual feedback could be added here (toast)
     } catch {}
   };
 
@@ -248,7 +285,12 @@ export default function TrackingPage() {
     window.open(url, "_blank", "noopener");
   };
 
-  // render states
+  // render states (map loading uses polite polling state)
+  const loading = pollingLoading && !data;
+  const error = pollingError
+    ? pollingError.message || String(pollingError)
+    : null;
+
   if (loading) {
     return (
       <div className="max-w-4xl mx-auto py-24 px-4">
@@ -267,7 +309,8 @@ export default function TrackingPage() {
     );
   }
 
-  if (error) {
+  if (error && !data) {
+    // show error only if we have no cached data; otherwise show UI and a small banner.
     return (
       <div className="max-w-3xl mx-auto py-24 px-4">
         <motion.div
@@ -284,7 +327,7 @@ export default function TrackingPage() {
           <div className="mt-3">
             <button
               className="inline-flex items-center gap-2 px-3 py-1.5 bg-white rounded border text-sm"
-              onClick={() => window.location.reload()}
+              onClick={() => refresh()}
             >
               <RefreshCw size={14} /> Retry
             </button>
@@ -545,7 +588,10 @@ export default function TrackingPage() {
           <div className="bg-white rounded-lg p-4 shadow-sm">
             <h2 className="font-semibold mb-3">Route & Checkpoints</h2>
             {route.length > 0 ? (
-              <RouteTimeline route={route} currentIndex={currentIndex} />
+              <RouteTimeline
+                route={routeToRender}
+                currentIndex={indexForRender}
+              />
             ) : (
               <div className="text-sm text-gray-500">
                 Route not available yet.
@@ -564,8 +610,8 @@ export default function TrackingPage() {
               {route.length > 0 ? (
                 <>
                   <RouteMap
-                    route={route}
-                    currentIndex={currentIndex}
+                    route={routeToRender}
+                    currentIndex={indexForRender}
                     currentLocation={data?.currentLocation}
                     prevLocation={prevLocation}
                     height={420}
