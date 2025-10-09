@@ -213,6 +213,7 @@ export default function AdminPage() {
     }
   }
 
+  // Replace your existing handleNext with this function
   async function handleNext(idOrTrackingId) {
     try {
       console.log("🧭 handleNext called with:", idOrTrackingId);
@@ -233,8 +234,11 @@ export default function AdminPage() {
         typeof window !== "undefined" ? localStorage.getItem("adminKey") : null;
       if (!ADMIN_KEY) throw new Error("Missing admin key");
 
-      // call the /next endpoint that you deployed
-      const res = await fetch(`/api/admin/records/${id}/next`, {
+      // Hardcode your live API base here:
+      const API_BASE = "https://swiftlogistics-mu.vercel.app";
+
+      // Call the backend route directly
+      const res = await fetch(`${API_BASE}/api/admin/records/${id}/next`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -251,10 +255,10 @@ export default function AdminPage() {
         );
       }
 
-      // server returns the updated document
+      // Server returns updated record
       const updated = body;
 
-      // update UI state
+      // Update UI state
       setRecords((prev) =>
         prev.map((r) => (r.trackingId === record.trackingId ? updated : r))
       );
