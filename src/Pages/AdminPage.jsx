@@ -214,19 +214,34 @@ export default function AdminPage() {
   }
 
   async function handleNext(idOrTrackingId) {
-    const updated = await nextStopWithKey(idOrTrackingId);
-    const updatedIdStr = normalizeId(updated._id);
-    const updatedTrackingId = updated.trackingId;
+    try {
+      // Find the record locally first
+      const record = records.find(
+        (r) =>
+          r.trackingId === idOrTrackingId ||
+          String(r._id) === String(idOrTrackingId)
+      );
+      if (!record) throw new Error("Record not found");
 
-    setRecords((s) =>
-      s.map((r) =>
-        normalizeId(r._id) === updatedIdStr ||
-        r.trackingId === updatedTrackingId
-          ? updated
-          : r
-      )
-    );
-    return updated;
+      // Increment its currentIndex
+      const nextIndex = (record.currentIndex ?? 0) + 1;
+
+      // Send the PATCH update (this hits your working /api/admin/records route)
+      const updated = await updateRecordWithKey(record.trackingId, {
+        currentIndex: nextIndex,
+      });
+
+      // Update local UI state
+      setRecords((prev) =>
+        prev.map((r) => (r.trackingId === record.trackingId ? updated : r))
+      );
+
+      console.log("✅ Moved to next stop successfully:", updated);
+      return updated;
+    } catch (err) {
+      console.error("❌ Update failed (handleNext):", err);
+      alert("Failed to move to next stop.");
+    }
   }
 
   return (
