@@ -215,6 +215,9 @@ export default function AdminPage() {
 
   async function handleNext(idOrTrackingId) {
     try {
+      // 🧭 Add this line here:
+      console.log("🧭 handleNext called with:", idOrTrackingId);
+
       // Find the record locally first
       const record = records.find(
         (r) =>
@@ -222,6 +225,8 @@ export default function AdminPage() {
           String(r._id) === String(idOrTrackingId)
       );
       if (!record) throw new Error("Record not found");
+
+      console.log("✅ Found record:", record.trackingId, record._id);
 
       // Increment its currentIndex
       const nextIndex = (record.currentIndex ?? 0) + 1;
