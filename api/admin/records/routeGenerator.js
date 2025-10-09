@@ -1,5 +1,5 @@
 // pages/api/admin/records/routeGenerator.js
-import fetch from "node-fetch";
+// Hardened ORS route generator — safe runtime checks, dynamic fetch import, defensive abort handling
 
 /**
  * Decode Google's encoded polyline to array of [lng, lat] pairs.
@@ -10,7 +10,7 @@ function decodePolyline(encoded) {
     lat = 0,
     lng = 0,
     coordinates = [];
-  const str = encoded;
+  const str = String(encoded || "");
   while (index < str.length) {
     let b,
       shift = 0,
@@ -40,39 +40,89 @@ function decodePolyline(encoded) {
 }
 
 /**
+ * Helper to get a fetch function that works both in Node 18+ (global fetch)
+ * and when node-fetch is required.
+ */
+async function getFetch() {
+  if (typeof fetch === "function") return fetch;
+  // dynamic import to avoid module resolution errors at startup
+  try {
+    const mod = await import("node-fetch");
+    // node-fetch v3 default export is the fetch function
+    return mod.default || mod;
+  } catch (err) {
+    throw new Error(
+      "No fetch available in runtime and failed to import node-fetch"
+    );
+  }
+}
+
+/**
+ * Safe helper to create AbortController if available.
+ */
+function tryCreateAbortController(timeoutMs = 10000) {
+  let controller = null;
+  try {
+    if (typeof AbortController !== "undefined") {
+      controller = new AbortController();
+      const t = setTimeout(() => {
+        try {
+          controller.abort();
+        } catch {}
+      }, timeoutMs);
+      return { controller, clear: () => clearTimeout(t) };
+    }
+  } catch (e) {
+    // ignore - AbortController not available
+  }
+  return { controller: null, clear: () => {} };
+}
+
+/**
  * Generate route checkpoints using OpenRouteService Directions API
  * @param {Object} origin - { lat, lng, city }
  * @param {Object} destination - { lat, lng, city }
  * @returns {Promise<Array>} route checkpoints [{ city, location: { type:'Point', coordinates:[lng,lat] } }]
  */
 export async function generateRoute(origin, destination) {
-  if (!origin?.lat || !origin?.lng || !destination?.lat || !destination?.lng) {
-    console.warn("generateRoute: Missing lat/lng");
-    return [];
-  }
-
-  const ORS_KEY = process.env.ORS_API_KEY;
-  if (!ORS_KEY) {
-    console.error("generateRoute: ORS_API_KEY not set");
-    return [];
-  }
-
-  const url = `https://api.openrouteservice.org/v2/directions/driving-car`;
-  // Request GeoJSON directly by setting format: "geojson" in body
-  const body = {
-    coordinates: [
-      [origin.lng, origin.lat],
-      [destination.lng, destination.lat],
-    ],
-    format: "geojson", // <--- ask ORS to return GeoJSON coordinates
-  };
-
-  const controller = new AbortController();
-  const timeoutMs = 10000;
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-
   try {
-    const res = await fetch(url, {
+    // defensive input check
+    if (
+      !origin ||
+      !destination ||
+      !Number.isFinite(Number(origin.lat)) ||
+      !Number.isFinite(Number(origin.lng)) ||
+      !Number.isFinite(Number(destination.lat)) ||
+      !Number.isFinite(Number(destination.lng))
+    ) {
+      console.warn("generateRoute: invalid origin/destination", {
+        origin,
+        destination,
+      });
+      return [];
+    }
+
+    const ORS_KEY = process.env.ORS_API_KEY;
+    if (!ORS_KEY) {
+      console.error("generateRoute: ORS_API_KEY not set");
+      return [];
+    }
+
+    const _fetch = await getFetch();
+
+    const url = `https://api.openrouteservice.org/v2/directions/driving-car`;
+    // Request GeoJSON directly (ORS accepts format in body for POST)
+    const body = {
+      coordinates: [
+        [Number(origin.lng), Number(origin.lat)],
+        [Number(destination.lng), Number(destination.lat)],
+      ],
+      format: "geojson",
+    };
+
+    const { controller, clear } = tryCreateAbortController(10000);
+
+    const res = await _fetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -80,9 +130,10 @@ export async function generateRoute(origin, destination) {
         Accept: "application/json, application/geo+json",
       },
       body: JSON.stringify(body),
-      signal: controller.signal,
+      ...(controller ? { signal: controller.signal } : {}),
     });
-    clearTimeout(timeout);
+
+    clear();
 
     const text = await res.text();
     if (!res.ok) {
@@ -92,39 +143,42 @@ export async function generateRoute(origin, destination) {
       return [];
     }
 
-    // parse JSON after we've read text (already read above)
-    const data = JSON.parse(text);
-
-    // ORS responses vary depending on format: try GeoJSON routes->geometry->coordinates first
-    let coords = [];
-    if (data?.routes?.[0]?.geometry) {
-      // If format=geojson, geometry is an object with coordinates array
-      if (
-        typeof data.routes[0].geometry === "object" &&
-        Array.isArray(data.routes[0].geometry.coordinates)
-      ) {
-        coords = data.routes[0].geometry.coordinates; // array of [lng, lat] pairs
-      } else if (typeof data.routes[0].geometry === "string") {
-        // encoded polyline string -> decode
-        coords = decodePolyline(data.routes[0].geometry);
-      }
-    } else if (data?.features?.[0]?.geometry?.coordinates) {
-      // older GeoJSON style
-      coords = data.features[0].geometry.coordinates;
-    } else {
-      console.warn("generateRoute: no route geometry found in ORS response");
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (err) {
+      console.error("generateRoute: failed to parse ORS response JSON", err);
       return [];
     }
 
-    if (!coords.length) {
+    // parse coordinates from ORS response: be flexible
+    let coords = [];
+    if (data?.routes?.[0]?.geometry) {
+      const geom = data.routes[0].geometry;
+      if (typeof geom === "object" && Array.isArray(geom.coordinates)) {
+        coords = geom.coordinates;
+      } else if (typeof geom === "string" && geom.length > 0) {
+        coords = decodePolyline(geom);
+      }
+    } else if (data?.features?.[0]?.geometry?.coordinates) {
+      coords = data.features[0].geometry.coordinates;
+    } else {
+      console.warn(
+        "generateRoute: no route geometry found in ORS response",
+        data
+      );
+      return [];
+    }
+
+    if (!Array.isArray(coords) || coords.length === 0) {
       console.warn(
         "generateRoute: coordinates empty after parsing ORS response"
       );
       return [];
     }
 
-    // sample points so output isn't huge
-    const sampleRate = Math.max(1, Math.floor(coords.length / 50)); // aim ~50 points
+    // sampling: keep route modest size
+    const sampleRate = Math.max(1, Math.floor(coords.length / 50)); // ~50 points
     const checkpoints = coords
       .filter((_, idx) => idx % sampleRate === 0 || idx === coords.length - 1)
       .map(([lng, lat], i) => ({
@@ -139,13 +193,10 @@ export async function generateRoute(origin, destination) {
 
     return checkpoints;
   } catch (err) {
-    if (err.name === "AbortError") {
-      console.error("generateRoute: request timed out");
-    } else {
-      console.error("generateRoute: unexpected error", err);
-    }
+    console.error(
+      "generateRoute: unexpected error",
+      err && err.stack ? err.stack : String(err)
+    );
     return [];
-  } finally {
-    clearTimeout(timeout);
   }
 }
