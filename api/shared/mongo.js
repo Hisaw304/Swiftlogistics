@@ -6,17 +6,28 @@ const dbName = process.env.DB_NAME || "tracking_demo";
 
 if (!uri) throw new Error("MONGODB_URI not set");
 
-let cached = global._mongo; // reuse across lambda invocations
-if (!cached) cached = global._mongo = { conn: null, client: null };
+let cachedClient = global.__mongo_client__;
+let cachedDb = global.__mongo_db__;
 
 export async function connectToDatabase() {
-  if (cached.conn) return cached.conn;
+  if (cachedClient && cachedDb) {
+    return { client: cachedClient, db: cachedDb };
+  }
+
   const client = new MongoClient(uri, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
+    // keep pool small on M0; tune upward for larger clusters
+    maxPoolSize: 10,
+    // optionally set other options:
+    // minPoolSize: 0,
+    // serverSelectionTimeoutMS: 5000
   });
+
   await client.connect();
   const db = client.db(dbName);
-  cached.conn = { client, db };
-  return cached.conn;
+
+  // cache on global so subsequent cold starts reuse client in same runtime
+  global.__mongo_client__ = client;
+  global.__mongo_db__ = db;
+
+  return { client, db };
 }
