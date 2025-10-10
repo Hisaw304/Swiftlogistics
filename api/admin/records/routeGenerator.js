@@ -177,19 +177,67 @@ export async function generateRoute(origin, destination) {
       return [];
     }
 
-    // sampling: keep route modest size
-    const sampleRate = Math.max(1, Math.floor(coords.length / 50)); // ~50 points
-    const checkpoints = coords
-      .filter((_, idx) => idx % sampleRate === 0 || idx === coords.length - 1)
-      .map(([lng, lat], i) => ({
-        city:
-          i === 0
-            ? origin.city || "Origin"
-            : i === coords.length - 1
-            ? destination.city || "Destination"
-            : `Stop ${i}`,
-        location: { type: "Point", coordinates: [lng, lat] },
-      }));
+    // ----- sampling + dedupe + correct labeling -----
+    const totalCoords = coords.length;
+    // target max checkpoints (including origin + destination)
+    const TARGET_POINTS = 8; // tweak: 5..12 is reasonable
+    // sampleRate as fallback (but we'll compute indexes smartly)
+    const step = Math.max(1, Math.floor(totalCoords / TARGET_POINTS));
+
+    // accumulate sampled entries preserving the original index so we can detect origin/dest
+    const sampled = [];
+    const minDistanceMeters = 80; // skip points closer than ~80m to previous kept (tweak)
+
+    // quick helper: approximate distance (meters) between two lng/lat using equirectangular approx
+    function approxMeters(aLng, aLat, bLng, bLat) {
+      const toRad = Math.PI / 180;
+      const x = (bLng - aLng) * Math.cos(((aLat + bLat) / 2) * toRad);
+      const y = (bLat - aLat) * toRad;
+      // Earth radius ~6371000 m
+      return Math.sqrt(x * x + y * y) * 6371000;
+    }
+
+    // Always include first point
+    sampled.push({ lng: coords[0][0], lat: coords[0][1], idx: 0 });
+    let lastKept = coords[0];
+
+    // pick intermediate points at `step` intervals but apply dedupe by distance
+    for (let i = step; i < totalCoords - 1; i += step) {
+      const [lng, lat] = coords[i];
+      const dist = approxMeters(lastKept[0], lastKept[1], lng, lat);
+      if (dist >= minDistanceMeters) {
+        sampled.push({ lng, lat, idx: i });
+        lastKept = [lng, lat];
+      }
+    }
+
+    // ensure final point is included (destination)
+    if (totalCoords > 1) {
+      const last = coords[totalCoords - 1];
+      // if last is too close to lastKept, replace it; else push
+      const distLast = approxMeters(lastKept[0], lastKept[1], last[0], last[1]);
+      if (distLast < 1) {
+        // already identical; optionally skip
+      } else {
+        sampled.push({ lng: last[0], lat: last[1], idx: totalCoords - 1 });
+      }
+    }
+
+    // build checkpoints; note we now have original indexes available as `idx`
+    const checkpoints = sampled.map((p, i) => {
+      const isOrigin = p.idx === 0;
+      const isDest = p.idx === totalCoords - 1;
+      return {
+        city: isOrigin
+          ? origin.city || "Origin"
+          : isDest
+          ? destination.city ||
+            (destination.address && destination.address.full) ||
+            "Destination"
+          : `Stop ${i}`,
+        location: { type: "Point", coordinates: [p.lng, p.lat] },
+      };
+    });
 
     return checkpoints;
   } catch (err) {

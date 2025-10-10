@@ -551,9 +551,6 @@ export default function TrackingPage() {
           <div className="bg-white rounded-lg p-4 shadow-sm">
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-semibold">Delivery Route Map</h2>
-              <div className="text-xs text-gray-400">
-                Current location: {formatLocation(data?.currentLocation)}
-              </div>
             </div>
             <div className="rounded overflow-hidden h-[420px] bg-gray-50">
               {route.length > 0 ? (
