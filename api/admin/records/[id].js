@@ -20,6 +20,75 @@ export default async function handler(req, res) {
 
   if (req.method === "OPTIONS") return res.status(204).end();
   if (!ADMIN(req)) return res.status(401).json({ error: "Unauthorized" });
+  // ✅ Handle POST /api/admin/records/:id/next
+  if (req.method === "POST" && req.url && req.url.endsWith("/next")) {
+    try {
+      const { db } = await connectToDatabase();
+      const col = db.collection("trackings");
+
+      const rec = await col.findOne(
+        ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { trackingId: id }
+      );
+      if (!rec) return res.status(404).json({ error: "Not found" });
+
+      const currentIndex = Number.isFinite(Number(rec.currentIndex))
+        ? Number(rec.currentIndex)
+        : 0;
+      const lastIndex = (rec.route || []).length - 1;
+      if (currentIndex >= lastIndex)
+        return res.status(400).json({ error: "Already at final checkpoint" });
+
+      const newIndex = currentIndex + 1;
+      const checkpoint = (rec.route || [])[newIndex] || null;
+      const now = new Date().toISOString();
+
+      const historyEntry = {
+        timestamp: now,
+        location: checkpoint
+          ? checkpoint.location
+          : rec.currentLocation || null,
+        city: checkpoint ? checkpoint.city : null,
+        note: "Arrived checkpoint",
+        by: "admin",
+      };
+
+      const newStatus =
+        newIndex === lastIndex
+          ? "Delivered"
+          : rec.status === "Pending"
+          ? "Shipped"
+          : rec.status;
+
+      await col.updateOne(
+        ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { trackingId: id },
+        {
+          $set: {
+            currentIndex: newIndex,
+            currentLocation: checkpoint
+              ? checkpoint.location
+              : rec.currentLocation || null,
+            status: newStatus,
+            updatedAt: now,
+            lastUpdated: now,
+          },
+          $push: { locationHistory: historyEntry },
+        }
+      );
+
+      const updated = await col.findOne(
+        ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { trackingId: id }
+      );
+      if (updated._id && typeof updated._id !== "string")
+        updated._id = updated._id.toString();
+
+      return res.status(200).json(updated);
+    } catch (err) {
+      console.error("NEXT (merged) error:", err);
+      return res
+        .status(500)
+        .json({ error: "Internal error", detail: String(err) });
+    }
+  }
 
   // resolve id param (Next gives it as req.query.id for /api/admin/records/[id])
   let id = undefined;

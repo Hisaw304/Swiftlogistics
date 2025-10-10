@@ -213,12 +213,10 @@ export default function AdminPage() {
     }
   }
 
-  // Replace handleNext in AdminPage (frontend)
   async function handleNext(idOrTrackingId) {
     try {
       console.log("🧭 handleNext called with:", idOrTrackingId);
 
-      // Find the record locally first
       const record = records.find(
         (r) =>
           r.trackingId === idOrTrackingId ||
@@ -230,7 +228,6 @@ export default function AdminPage() {
 
       const nextIndex = (record.currentIndex ?? 0) + 1;
 
-      // Use the PATCH collection-level endpoint (this should already be working)
       const adminKey =
         typeof window !== "undefined" ? localStorage.getItem("adminKey") : null;
       if (!adminKey) throw new Error("Missing admin key");
@@ -242,23 +239,31 @@ export default function AdminPage() {
           "x-admin-key": adminKey,
         },
         body: JSON.stringify({
+          // IMPORTANT: use trackingId (UUID) if available — server searches by it
           trackingId: record.trackingId || String(record._id),
           updates: { currentIndex: nextIndex },
         }),
         cache: "no-store",
       });
 
-      const body = await res.json().catch(() => null);
+      // helpful debug if server returns non-JSON or error
+      const text = await res.text().catch(() => "");
+      let body = null;
+      try {
+        body = text ? JSON.parse(text) : null;
+      } catch (e) {
+        body = text;
+      }
+
       if (!res.ok) {
+        console.error("Server responded non-ok:", res.status, body);
         throw new Error(
           body?.error || JSON.stringify(body) || `HTTP ${res.status}`
         );
       }
 
-      // server returns either updatedRecord or doc — we trust returned doc
       const updated = body.updatedRecord || body;
 
-      // update UI state with returned document (normalize _id to string if needed)
       setRecords((prev) =>
         prev.map((r) => (r.trackingId === record.trackingId ? updated : r))
       );
