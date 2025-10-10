@@ -35,97 +35,17 @@ const statusInfo = {
   },
 };
 
-// Reusable card header to match your site pattern (small label + title)
-function CardHeader({ label }) {
-  return (
-    <div className="card-header">
-      <div className="card-label-row">
-        <span className="shape shape-left" aria-hidden>
-          <svg
-            width="59"
-            height="5"
-            viewBox="0 0 59 5"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <rect
-              width="50"
-              height="5"
-              rx="2.5"
-              fill="var(--color-secondary)"
-            ></rect>
-            <circle
-              cx="56.5"
-              cy="2.5"
-              r="2.5"
-              fill="var(--color-secondary)"
-            ></circle>
-          </svg>
-        </span>
-
-        <span className="card-label uppercase text-sm font-semibold text-[var(--color-primary)]">
-          {label}
-        </span>
-
-        <span className="shape shape-right" aria-hidden>
-          <svg
-            width="59"
-            height="5"
-            viewBox="0 0 59 5"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <rect
-              width="50"
-              height="5"
-              rx="2.5"
-              transform="matrix(-1 0 0 1 59 0)"
-              fill="var(--color-secondary)"
-            ></rect>
-            <circle
-              cx="2.5"
-              cy="2.5"
-              r="2.5"
-              transform="matrix(-1 0 0 1 5 0)"
-              fill="var(--color-secondary)"
-            ></circle>
-          </svg>
-        </span>
-      </div>
-    </div>
-  );
-}
-
-// tiny inline icon fallback to avoid adding another dependency in case lucide-react is missing
-function AlertIcon() {
-  return (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="text-red-600"
-    >
-      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-      <line x1="12" y1="9" x2="12" y2="13"></line>
-      <line x1="12" y1="17" x2="12.01" y2="17"></line>
-    </svg>
-  );
-}
-
+// Modernized TrackingPage — defaults to graceful fallbacks, timeouts, and nicer UI
 export default function TrackingPage() {
   const { id } = useParams();
   const navigate = useNavigate();
 
   const [data, setData] = useState(null);
   const [imgError, setImgError] = useState(false);
-  const [prevLocation, setPrevLocation] = useState(null);
+  const [prevLocation, setPrevLocation] = useState(null); // previous location for animation
   const [showAll, setShowAll] = useState(false);
 
+  // small fetch helper with timeout (kept from your original)
   async function fetchWithTimeout(url, options = {}, timeout = 12000) {
     const controller = new AbortController();
     const idt = setTimeout(() => controller.abort(), timeout);
@@ -139,6 +59,7 @@ export default function TrackingPage() {
     }
   }
 
+  // fetch function used by polite polling hook
   const fetchTracking = async () => {
     if (!id) throw new Error("Missing tracking id");
     const res = await fetchWithTimeout(
@@ -159,10 +80,11 @@ export default function TrackingPage() {
     }
     return res.json();
   };
-
+  // === Manual fetch mode (no automatic polling) ===
   const [loadingManual, setLoadingManual] = useState(false);
   const [manualError, setManualError] = useState(null);
 
+  // Call this to load current record (manual or initial)
   async function loadTracking() {
     if (!id) {
       setData(null);
@@ -173,6 +95,7 @@ export default function TrackingPage() {
     try {
       const json = await fetchTracking();
 
+      // update prevLocation for animation if location changed
       try {
         const oldLoc = data?.currentLocation || null;
         const newLoc = json?.currentLocation || null;
@@ -214,6 +137,7 @@ export default function TrackingPage() {
     }
   }
 
+  // Optionally load once when the page mounts / id changes (manual-first UX)
   useEffect(() => {
     loadTracking();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -223,34 +147,48 @@ export default function TrackingPage() {
   const route = Array.isArray(data?.route) ? data.route : [];
   const currentIndex =
     typeof data?.currentIndex === "number" ? data.currentIndex : 0;
+  // compute a trimmed route view and mapped index for the map/timeline
   const { windowed, mappedIndex, isWindowed } = computeWindowedRoute(
     route,
     currentIndex,
     2
-  );
+  ); // windowSize=2 (tweak)
   const routeToRender = showAll ? route : windowed;
   const indexForRender = showAll ? currentIndex : mappedIndex;
 
+  // ---------- start windowing helper (paste here, inside TrackingPage) ----------
   function computeWindowedRoute(route = [], currentIndex = 0, windowSize = 2) {
+    // keep origin and destination always
     if (!Array.isArray(route) || route.length === 0)
       return { windowed: [], mappedIndex: 0 };
 
     const total = route.length;
     const origin = route[0];
     const dest = route[total - 1];
+
+    // clamp currentIndex
     const idx = Math.max(0, Math.min(total - 1, Number(currentIndex) || 0));
+
+    // if route is small, return as-is
     if (total <= 7)
       return { windowed: route, mappedIndex: idx, isWindowed: false };
 
+    // pick window around currentIndex (N before, N after)
     const start = Math.max(1, idx - windowSize);
     const end = Math.min(total - 2, idx + windowSize);
+
+    // compose: origin + middle slice + dest
     const middle = route.slice(start, end + 1);
     const windowed = [origin, ...middle, dest];
+
+    // map original currentIndex to new index in windowed array
+    // origin maps to 0; original index 'start' maps to 1, etc.
     const mappedIndex =
       idx <= 0 ? 0 : idx >= total - 1 ? windowed.length - 1 : 1 + (idx - start);
 
     return { windowed, mappedIndex, isWindowed: true, start, end, total, idx };
   }
+  // ---------- end windowing helper ----------
 
   const progress = useMemo(() => {
     if (typeof data?.progressPct === "number") return data.progressPct;
@@ -305,18 +243,23 @@ export default function TrackingPage() {
 
   const normalizePoint = (loc) => {
     if (!loc) return null;
-    if (Array.isArray(loc) && loc.length >= 2)
+    if (Array.isArray(loc) && loc.length >= 2) {
+      // assume [lng, lat]
       return { lat: Number(loc[1]), lng: Number(loc[0]) };
-    if (loc.type === "Point" && Array.isArray(loc.coordinates))
+    }
+    if (loc.type === "Point" && Array.isArray(loc.coordinates)) {
       return {
         lat: Number(loc.coordinates[1]),
         lng: Number(loc.coordinates[0]),
       };
-    if (typeof loc.lat === "number" && typeof loc.lng === "number")
+    }
+    if (typeof loc.lat === "number" && typeof loc.lng === "number") {
       return { lat: Number(loc.lat), lng: Number(loc.lng) };
+    }
     return null;
   };
 
+  // small UI actions
   const copyId = async () => {
     try {
       await navigator.clipboard.writeText(id || "");
@@ -329,20 +272,22 @@ export default function TrackingPage() {
     window.open(url, "_blank", "noopener");
   };
 
+  // render states (map loading uses polite polling state)
+  // with:
   const loading = loadingManual && !data;
   const error = manualError ? manualError.message || String(manualError) : null;
 
   if (loading) {
     return (
       <div className="max-w-4xl mx-auto py-24 px-4">
-        <div className="w-full card-modern rounded-lg p-8">
+        <div className="w-full bg-white/60 dark:bg-gray-900/60 rounded-lg p-8 shadow-md backdrop-blur">
           <div className="flex items-center gap-4">
             <div className="flex-1">
-              <div className="h-6 bg-slate-100 rounded w-1/3 animate-pulse mb-3"></div>
-              <div className="h-48 bg-slate-100 rounded animate-pulse" />
+              <div className="h-6 bg-gray-200 rounded w-1/3 animate-pulse mb-3"></div>
+              <div className="h-48 bg-gray-100 rounded animate-pulse" />
             </div>
             <div className="w-48 hidden sm:block">
-              <div className="h-48 bg-slate-100 rounded animate-pulse" />
+              <div className="h-48 bg-gray-100 rounded animate-pulse" />
             </div>
           </div>
         </div>
@@ -351,12 +296,13 @@ export default function TrackingPage() {
   }
 
   if (error && !data) {
+    // show error only if we have no cached data; otherwise show UI and a small banner.
     return (
       <div className="max-w-3xl mx-auto py-24 px-4">
         <motion.div
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
-          className="alert-card"
+          className="bg-red-50 border border-red-100 text-red-800 rounded-lg p-6 text-center"
           role="alert"
           aria-live="assertive"
         >
@@ -366,8 +312,8 @@ export default function TrackingPage() {
           </div>
           <div className="mt-3">
             <button
-              className="btn-ghost inline-flex items-center gap-2 px-3 py-1.5"
-              onClick={() => loadTracking()}
+              className="inline-flex items-center gap-2 px-3 py-1.5 bg-white rounded border text-sm"
+              onClick={() => refresh()}
             >
               <RefreshCw size={14} /> Retry
             </button>
@@ -380,10 +326,13 @@ export default function TrackingPage() {
   if (!data) {
     return (
       <div className="max-w-3xl mx-auto py-24 px-4">
-        <div className="card-modern rounded-lg p-8 text-center">
+        <div className="bg-white/60 rounded-lg p-8 text-center">
           <p className="text-gray-700">No tracking data found for this ID.</p>
           <div className="mt-4">
-            <button className="btn-primary" onClick={() => navigate("/")}>
+            <button
+              className="px-4 py-2 bg-blue-600 text-white rounded"
+              onClick={() => navigate("/")}
+            >
               Go home
             </button>
           </div>
@@ -400,111 +349,77 @@ export default function TrackingPage() {
     >
       <div className="flex items-start justify-between gap-4 mb-6">
         <div>
-          <h1 className="page-title">Tracking ID: {id}</h1>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            className="btn-ghost"
-            onClick={() => loadTracking()}
-            title="Refresh"
-          >
-            <RefreshCw size={16} /> Refresh
-          </button>
-          <button
-            className="btn-ghost"
-            onClick={copyId}
-            title="Copy tracking id"
-          >
-            Copy ID
-          </button>
-          <button
-            className="btn-primary"
-            onClick={openExternal}
-            title="Open details"
-          >
-            Open in new tab
-          </button>
+          <h1 className="text-2xl md:text-3xl font-bold">Tracking ID: {id}</h1>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Left column: modern vertical card stack */}
-        <div className="md:col-span-1 space-y-4">
+        {/* Left column: image + grouped cards */}
+        <div className="md:col-span-1 bg-white rounded-lg p-4 shadow-sm space-y-4">
           {/* Image */}
-          <div className="card-modern p-4">
-            <div className="media-wrap">
-              <img
-                src={imgSrc}
-                alt={
-                  data?.productDescription || data?.product || "Product image"
-                }
-                onError={() => setImgError(true)}
-                className="media-image"
-              />
-            </div>
+          <div className="w-full h-64 bg-gray-50 rounded overflow-hidden flex items-center justify-center">
+            <img
+              src={imgSrc}
+              alt={data?.productDescription || data?.product || "Product image"}
+              onError={() => setImgError(true)}
+              className="max-h-full max-w-full object-contain"
+            />
           </div>
 
           {/* Shipment Summary Card */}
-          <div className="card-modern p-4">
-            <CardHeader label="Shipment Summary" />
-            <div className="card-body">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <div className="icon-circle">
-                    <Package size={16} />
-                  </div>
-                  <div>
-                    <div className="font-medium text-gray-800">
-                      {data?.productDescription || data?.product || "Product"}
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      {data?.serviceType ? `${data.serviceType}` : "Service: —"}
-                      {data?.shipmentDetails
-                        ? ` • ${data.shipmentDetails}`
-                        : ""}
-                    </div>
-                  </div>
-                </div>
-                <div className="text-sm text-gray-600">
-                  Qty: {data?.quantity ?? 1}
-                </div>
-              </div>
-
-              <div className="mt-3 text-sm text-gray-600">
+          <div className="bg-gray-50 rounded p-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <Package size={14} />
                 <div>
-                  <span className="font-medium text-gray-800">Weight:</span>{" "}
-                  {data?.weightKg ? `${data.weightKg} kg` : "—"}
-                </div>
-                {data?.description && (
-                  <div className="mt-1 text-xs text-gray-500">
-                    {data.description}
+                  <div className="font-medium text-gray-800">
+                    {data?.productDescription || data?.product || "Product"}
                   </div>
-                )}
-              </div>
-
-              <div className="mt-3">
-                <div className="text-xs text-gray-500">Current status</div>
-                <div
-                  className={`status-pill mt-1 ${
-                    status === "Delivered"
-                      ? "status-delivered"
-                      : status === "Shipped"
-                      ? "status-shipped"
-                      : "status-pending"
-                  }`}
-                >
-                  {status}
+                  <div className="text-xs text-gray-500">
+                    {data?.serviceType ? `${data.serviceType}` : "Service: —"}
+                    {data?.shipmentDetails ? ` • ${data.shipmentDetails}` : ""}
+                  </div>
                 </div>
+              </div>
+              <div className="text-sm text-gray-600">
+                Qty: {data?.quantity ?? 1}
+              </div>
+            </div>
+
+            <div className="mt-3 text-sm text-gray-600">
+              <div>
+                <span className="font-medium text-gray-800">Weight:</span>{" "}
+                {data?.weightKg ? `${data.weightKg} kg` : "—"}
+              </div>
+              {data?.description && (
+                <div className="mt-1 text-xs text-gray-500">
+                  {data.description}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-3">
+              <div className="text-xs text-gray-500">Current status</div>
+              <div
+                className={`mt-1 inline-block px-3 py-1 rounded-full text-sm font-medium ${
+                  status === "Delivered"
+                    ? "bg-green-100 text-green-800"
+                    : status === "Shipped"
+                    ? "bg-blue-100 text-blue-800"
+                    : "bg-yellow-100 text-yellow-800"
+                }`}
+              >
+                {status}
               </div>
             </div>
           </div>
 
           {/* Progress Card */}
-          <div className="card-modern p-4">
-            <CardHeader label="Delivery Progress" />
-            <div className="card-body">
+          <div className="bg-white rounded p-3 border">
+            <div className="text-xs text-gray-500">Delivery Progress</div>
+            <div className="mt-2">
               <ProgressBar progress={progress} status={status} />
-              <div className="text-xs text-gray-400 mt-2">
+              <div className="text-xs text-gray-400 mt-1">
                 {progress}% • Checkpoint{" "}
                 {Math.min(currentIndex + 1, route.length)} of{" "}
                 {route.length || "?"}
@@ -513,17 +428,21 @@ export default function TrackingPage() {
           </div>
 
           {/* Recipient Information Card */}
-          <div className="card-modern p-4">
-            <CardHeader label="Recipient Information" />
-            <div className="card-body text-sm text-gray-600 space-y-2">
+          <div className="bg-white rounded p-3 border">
+            <h3 className="text-base font-semibold text-gray-700 mb-2">
+              Recipient Information
+            </h3>
+            <div className="text-sm text-gray-600 space-y-1">
               <div>
                 <span className="font-medium text-gray-800">Name:</span>{" "}
                 {data?.destination?.receiverName || data?.customerName || "—"}
               </div>
+
               <div>
                 <span className="font-medium text-gray-800">Email:</span>{" "}
                 {data?.destination?.receiverEmail || "—"}
               </div>
+
               <div>
                 <span className="font-medium text-gray-800">Address:</span>{" "}
                 {data?.destination?.address?.full
@@ -540,6 +459,7 @@ export default function TrackingPage() {
                     } ${data.address.zip || ""}`
                   : "—"}
               </div>
+
               <div>
                 <span className="font-medium text-gray-800">Destination:</span>{" "}
                 {data?.route?.slice(-1)[0]?.city ||
@@ -551,13 +471,16 @@ export default function TrackingPage() {
           </div>
 
           {/* Origin / Sender Card */}
-          <div className="card-modern p-4">
-            <CardHeader label="Origin / Sender" />
-            <div className="card-body text-sm text-gray-600 space-y-2">
+          <div className="bg-white rounded p-3 border">
+            <h3 className="text-base font-semibold text-gray-700 mb-2">
+              Origin / Sender
+            </h3>
+            <div className="text-sm text-gray-600 space-y-1">
               <div>
                 <span className="font-medium text-gray-800">Sender:</span>{" "}
                 {data?.origin?.name || data?.originWarehouse || "—"}
               </div>
+
               <div>
                 <span className="font-medium text-gray-800">
                   Sender Address:
@@ -572,6 +495,7 @@ export default function TrackingPage() {
                     } ${data.origin.address.zip || ""}`
                   : "—"}
               </div>
+
               <div>
                 <span className="font-medium text-gray-800">
                   Origin Location:
@@ -586,15 +510,17 @@ export default function TrackingPage() {
           </div>
 
           {/* Dates Card */}
-          <div className="card-modern p-4">
-            <CardHeader label="Dates" />
-            <div className="card-body text-sm text-gray-600 space-y-2">
+          <div className="bg-white rounded p-3 border">
+            <h3 className="text-sm font-semibold text-gray-700 mb-2">Dates</h3>
+
+            <div className="text-sm text-gray-600 space-y-1">
               <div>
                 <span className="font-medium text-gray-800">Shipped:</span>{" "}
                 {data?.shipmentDate || data?.shippedDate
                   ? formatTime(data.shipmentDate || data.shippedDate)
                   : "—"}
               </div>
+
               <div>
                 <span className="font-medium text-gray-800">Expected:</span>{" "}
                 {data?.destination?.expectedDeliveryDate ||
@@ -611,37 +537,27 @@ export default function TrackingPage() {
 
         {/* Middle + Right: route timeline and map */}
         <div className="md:col-span-2 space-y-6">
-          <div className="card-modern p-4">
-            <CardHeader label="Route & Checkpoints" />
-            <div className="card-body">
-              {route.length > 0 ? (
-                <RouteTimeline
-                  route={routeToRender}
-                  currentIndex={indexForRender}
-                />
-              ) : (
-                <div className="text-sm text-gray-500">
-                  Route not available yet.
-                </div>
-              )}
-            </div>
-            {isWindowed && (
-              <div className="mt-3 text-right">
-                <button
-                  className="btn-ghost"
-                  onClick={() => setShowAll((s) => !s)}
-                >
-                  {showAll ? "Show window" : "Show full route"}
-                </button>
+          <div className="bg-white rounded-lg p-4 shadow-sm">
+            <h2 className="font-semibold mb-3">Route & Checkpoints</h2>
+            {route.length > 0 ? (
+              <RouteTimeline
+                route={routeToRender}
+                currentIndex={indexForRender}
+              />
+            ) : (
+              <div className="text-sm text-gray-500">
+                Route not available yet.
               </div>
             )}
           </div>
 
-          <div className="card-modern p-4">
-            <CardHeader label="Delivery Route Map" />
-            <div className="card-body">
-              <div className="rounded overflow-hidden h-[420px] bg-gray-50">
-                {route.length > 0 ? (
+          <div className="bg-white rounded-lg p-4 shadow-sm">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-semibold">Delivery Route Map</h2>
+            </div>
+            <div className="rounded overflow-hidden h-[420px] bg-gray-50">
+              {route.length > 0 ? (
+                <>
                   <RouteMap
                     route={routeToRender}
                     currentIndex={indexForRender}
@@ -649,12 +565,12 @@ export default function TrackingPage() {
                     prevLocation={prevLocation}
                     height={420}
                   />
-                ) : (
-                  <div className="h-full flex items-center justify-center text-gray-500">
-                    Map will appear when route data is available
-                  </div>
-                )}
-              </div>
+                </>
+              ) : (
+                <div className="h-full flex items-center justify-center text-gray-500">
+                  Map will appear when route data is available
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -683,5 +599,26 @@ export default function TrackingPage() {
         );
       })()}
     </motion.div>
+  );
+}
+
+// tiny inline icon fallback to avoid adding another dependency in case lucide-react is missing
+function AlertIcon() {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="text-red-600"
+    >
+      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+      <line x1="12" y1="9" x2="12" y2="13"></line>
+      <line x1="12" y1="17" x2="12.01" y2="17"></line>
+    </svg>
   );
 }
