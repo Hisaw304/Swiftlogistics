@@ -450,7 +450,9 @@ export default function AdminForm({
     }
   }
   // Automatically fetch coordinates for origin or destination
-  async function fetchCoordinates(address, setLat, setLng) {
+  async function geocodeAddress(address, setLat, setLng) {
+    if (!address) return;
+
     try {
       const res = await fetch(
         `/api/geocode?address=${encodeURIComponent(address)}`
@@ -461,11 +463,12 @@ export default function AdminForm({
         const [lng, lat] = data.features[0].geometry.coordinates;
         setLat(lat);
         setLng(lng);
+        console.log("✅ Geocoded:", address, lat, lng);
       } else {
-        console.warn("No coordinates found for", address);
+        console.warn("⚠️ No coordinates found for", address);
       }
     } catch (err) {
-      console.error("Geocoding error:", err);
+      console.error("❌ Geocoding error:", err);
     }
   }
 
