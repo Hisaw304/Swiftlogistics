@@ -43,13 +43,20 @@ export default async function handler(req, res) {
       route.length > 1
         ? Math.round((currentIndex / (route.length - 1)) * 100)
         : 0;
-
+    // -- add this before building the response --
+    const shipmentDate =
+      record.shipmentDate ||
+      record.shippedAt ||
+      record.shippedDate ||
+      record.shipment_date ||
+      null;
     // Build public response — include canonical fields you requested
     const response = {
       trackingId: record.trackingId,
       // shipment summary
       serviceType: record.serviceType || null,
       shipmentDetails: record.shipmentDetails || null,
+      shipmentDate,
       productDescription: record.productDescription || record.product || null,
       quantity: record.quantity ?? 1,
       weightKg: record.weightKg ?? null,

@@ -1,20 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import {
-  Copy,
-  ExternalLink,
-  RefreshCw,
-  MapPin,
-  Package,
-  Clock,
-  User,
-  X,
-} from "lucide-react";
+import { RefreshCw, MapPin, Package } from "lucide-react";
 import ProgressBar from "../components/ProgressBar";
 import RouteTimeline from "../components/RouteTimeline";
 import RouteMap from "../components/RouteMap";
-import usePolitePolling from "../hooks/usePolitePolling"; // <-- new
 
 const statusInfo = {
   pending: {
@@ -90,98 +80,68 @@ export default function TrackingPage() {
     }
     return res.json();
   };
+  // === Manual fetch mode (no automatic polling) ===
+  const [loadingManual, setLoadingManual] = useState(false);
+  const [manualError, setManualError] = useState(null);
 
-  // Use polite polling: polls in background, pauses on tab hide, exponential backoff on error.
-  // const {
-  //   loading: pollingLoading,
-  //   error: pollingError,
-  //   data: polledData,
-  //   refresh,
-  // } = usePolitePolling(fetchTracking, { interval: 15000, immediate: true });
-  // Temporary: perform a single fetch once (disable polling while we fix DB)
-  const [pollingLoading, setPollingLoading] = useState(false);
-  const [pollingError, setPollingError] = useState(null);
-  const [polledData, setPolledData] = useState(null);
-
-  useEffect(() => {
-    let alive = true;
-    async function loadOnce() {
-      if (!id) return;
-      setPollingLoading(true);
-      setPollingError(null);
-      try {
-        const data = await fetchTracking();
-        if (!alive) return;
-        setPolledData(data);
-      } catch (err) {
-        if (!alive) return;
-        setPollingError(err);
-      } finally {
-        if (alive) setPollingLoading(false);
-      }
-    }
-    loadOnce();
-    return () => {
-      alive = false;
-    };
-  }, [id]); // re-run when id changes
-
-  // Keep initial "no id" behavior: if no id, show message
-  useEffect(() => {
+  // Call this to load current record (manual or initial)
+  async function loadTracking() {
     if (!id) {
       setData(null);
-      setPrevLocation(null);
+      return;
     }
-    // when id changes, we clear previous data so UI resets while polling fetches new
-  }, [id]);
-
-  // When new polled data arrives, detect prevLocation and set data
-  useEffect(() => {
-    if (!polledData) return;
-
-    // If we already have a data.currentLocation and the new payload has a different currentLocation,
-    // move the previous to prevLocation so map can animate smoothly.
+    setLoadingManual(true);
+    setManualError(null);
     try {
-      const oldLoc = data?.currentLocation || null;
-      const newLoc = polledData?.currentLocation || null;
+      const json = await fetchTracking();
 
-      // helper to produce [lat, lng] tuple for comparison
-      const coordsOf = (c) => {
-        if (!c) return null;
-        // Array assumed [lng, lat] or [lat, lng] — try heuristics
-        if (Array.isArray(c) && c.length >= 2) {
-          const a = Number(c[0]);
-          const b = Number(c[1]);
-          // heuristic: if first value is in lat range, treat as [lat,lng]
-          if (a >= -90 && a <= 90 && b >= -180 && b <= 180) return [a, b];
-          // otherwise treat as [lng,lat]
-          return [Number(c[1]), Number(c[0])];
-        }
-        if (c && c.type === "Point" && Array.isArray(c.coordinates)) {
-          const [lng, lat] = c.coordinates;
-          return [Number(lat), Number(lng)];
-        }
-        if (c && typeof c.lat === "number" && typeof c.lng === "number") {
-          return [Number(c.lat), Number(c.lng)];
-        }
-        return null;
-      };
+      // update prevLocation for animation if location changed
+      try {
+        const oldLoc = data?.currentLocation || null;
+        const newLoc = json?.currentLocation || null;
 
-      const oc = coordsOf(oldLoc);
-      const nc = coordsOf(newLoc);
+        const coordsOf = (c) => {
+          if (!c) return null;
+          if (Array.isArray(c) && c.length >= 2) {
+            const a = Number(c[0]),
+              b = Number(c[1]);
+            if (a >= -90 && a <= 90 && b >= -180 && b <= 180) return [a, b];
+            return [Number(c[1]), Number(c[0])];
+          }
+          if (c && c.type === "Point" && Array.isArray(c.coordinates)) {
+            const [lng, lat] = c.coordinates;
+            return [Number(lat), Number(lng)];
+          }
+          if (c && typeof c.lat === "number" && typeof c.lng === "number") {
+            return [Number(c.lat), Number(c.lng)];
+          }
+          return null;
+        };
 
-      if (oc && nc && (oc[0] !== nc[0] || oc[1] !== nc[1])) {
-        setPrevLocation(oldLoc);
-      } else if (!oc && nc) {
-        // initial load — prev stays null
-        setPrevLocation(null);
+        const oc = coordsOf(oldLoc),
+          nc = coordsOf(newLoc);
+        if (oc && nc && (oc[0] !== nc[0] || oc[1] !== nc[1])) {
+          setPrevLocation(oldLoc);
+        } else if (!oc && nc) {
+          setPrevLocation(null);
+        }
+      } catch (e) {
+        // ignore compare errors
       }
-    } catch (e) {
-      // ignore compare errors
-    }
 
-    setData(polledData || null);
-  }, [polledData]); // intentionally depends only on polledData
+      setData(json || null);
+    } catch (err) {
+      setManualError(err);
+    } finally {
+      setLoadingManual(false);
+    }
+  }
+
+  // Optionally load once when the page mounts / id changes (manual-first UX)
+  useEffect(() => {
+    loadTracking();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
   // derive commonly used vars (defensive)
   const route = Array.isArray(data?.route) ? data.route : [];
@@ -313,10 +273,9 @@ export default function TrackingPage() {
   };
 
   // render states (map loading uses polite polling state)
-  const loading = pollingLoading && !data;
-  const error = pollingError
-    ? pollingError.message || String(pollingError)
-    : null;
+  // with:
+  const loading = loadingManual && !data;
+  const error = manualError ? manualError.message || String(manualError) : null;
 
   if (loading) {
     return (
@@ -391,26 +350,6 @@ export default function TrackingPage() {
       <div className="flex items-start justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold">Tracking ID: {id}</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Last updated: {formatTime(data?.lastUpdated)}
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            title="Copy tracking ID"
-            onClick={copyId}
-            className="inline-flex items-center gap-2 px-3 py-2 bg-gray-50 border rounded text-sm"
-          >
-            <Copy size={14} /> Copy
-          </button>
-          <button
-            title="Open in new tab"
-            onClick={openExternal}
-            className="inline-flex items-center gap-2 px-3 py-2 bg-gray-50 border rounded text-sm"
-          >
-            <ExternalLink size={14} /> Open
-          </button>
         </div>
       </div>
 
@@ -567,17 +506,18 @@ export default function TrackingPage() {
             </div>
           </div>
 
-          {/* Dates & Contact Card */}
+          {/* Dates Card */}
           <div className="bg-white rounded p-3 border">
-            <h3 className="text-sm font-semibold text-gray-700 mb-2">
-              Dates & Contact
-            </h3>
+            <h3 className="text-sm font-semibold text-gray-700 mb-2">Dates</h3>
 
             <div className="text-sm text-gray-600 space-y-1">
               <div>
                 <span className="font-medium text-gray-800">Shipped:</span>{" "}
-                {data?.shipmentDate ? formatTime(data.shipmentDate) : "—"}
+                {data?.shipmentDate || data?.shippedDate
+                  ? formatTime(data.shipmentDate || data.shippedDate)
+                  : "—"}
               </div>
+
               <div>
                 <span className="font-medium text-gray-800">Expected:</span>{" "}
                 {data?.destination?.expectedDeliveryDate ||
@@ -587,24 +527,6 @@ export default function TrackingPage() {
                         data.expectedDeliveryDate
                     )
                   : "—"}
-              </div>
-              <div>
-                <span className="font-medium text-gray-800">Last updated:</span>{" "}
-                {data?.lastUpdated ? formatTime(data.lastUpdated) : "—"}
-              </div>
-              <div className="mt-2 text-xs text-gray-500">
-                <div>
-                  <span className="font-medium">Contact:</span>{" "}
-                  {data?.contactEmail ||
-                    data?.destination?.receiverEmail ||
-                    "—"}
-                </div>
-                {data?.contactPhone && (
-                  <div>
-                    <span className="font-medium">Phone:</span>{" "}
-                    {data.contactPhone}
-                  </div>
-                )}
               </div>
             </div>
           </div>
@@ -650,45 +572,6 @@ export default function TrackingPage() {
                 </div>
               )}
             </div>
-          </div>
-
-          <div className="bg-white rounded-lg p-4 shadow-sm">
-            <h3 className="font-semibold mb-2">Location History</h3>
-            {Array.isArray(data?.locationHistory) &&
-            data.locationHistory.length > 0 ? (
-              <ul className="space-y-3 text-sm text-gray-700">
-                {data.locationHistory
-                  .slice()
-                  .reverse()
-                  .map((h, idx) => (
-                    <li
-                      key={idx}
-                      className="flex items-start justify-between gap-4"
-                    >
-                      <div>
-                        <div className="font-medium">
-                          {typeof h.city === "string"
-                            ? h.city
-                            : h.location
-                            ? "Lat/Lng update"
-                            : "Update"}
-                        </div>
-
-                        <div className="text-xs text-gray-500">
-                          {h.note || ""}
-                        </div>
-                      </div>
-                      <div className="text-right text-xs text-gray-400">
-                        {formatTime(h.timestamp)}
-                      </div>
-                    </li>
-                  ))}
-              </ul>
-            ) : (
-              <div className="text-sm text-gray-500">
-                No history recorded yet.
-              </div>
-            )}
           </div>
         </div>
       </div>
