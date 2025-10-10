@@ -347,79 +347,226 @@ export default function TrackingPage() {
       animate={{ opacity: 1, y: 0 }}
       className="max-w-6xl mx-auto mt-8 px-4 pb-12"
     >
-      <div className="flex items-start justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold">Tracking ID: {id}</h1>
+      {/* ------------------ TRACKING LABEL + H1 ------------------ */}
+      <div className="tracking-header text-center mb-6">
+        <div className="flex items-center justify-center gap-3 mb-3">
+          <span className="shape shape-left" aria-hidden>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="59"
+              height="5"
+              viewBox="0 0 59 5"
+              fill="none"
+            >
+              <rect
+                width="50"
+                height="5"
+                rx="2.5"
+                fill="var(--color-secondary)"
+              />
+              <circle
+                cx="56.5"
+                cy="2.5"
+                r="2.5"
+                fill="var(--color-secondary)"
+              />
+            </svg>
+          </span>
+
+          <span className="uppercase text-sm font-semibold text-[var(--color-primary)]">
+            TRACKING
+          </span>
+
+          <span className="shape shape-right" aria-hidden>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="59"
+              height="5"
+              viewBox="0 0 59 5"
+              fill="none"
+            >
+              <rect
+                width="50"
+                height="5"
+                rx="2.5"
+                transform="matrix(-1 0 0 1 59 0)"
+                fill="var(--color-secondary)"
+              />
+              <circle
+                cx="2.5"
+                cy="2.5"
+                r="2.5"
+                transform="matrix(-1 0 0 1 5 0)"
+                fill="var(--color-secondary)"
+              />
+            </svg>
+          </span>
         </div>
+
+        <h1 className="tracking-h1">Tracking Information</h1>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Left column: image + grouped cards */}
-        <div className="md:col-span-1 bg-white rounded-lg p-4 shadow-sm space-y-4">
-          {/* Image */}
-          <div className="w-full h-64 bg-gray-50 rounded overflow-hidden flex items-center justify-center">
-            <img
-              src={imgSrc}
-              alt={data?.productDescription || data?.product || "Product image"}
-              onError={() => setImgError(true)}
-              className="max-h-full max-w-full object-contain"
-            />
-          </div>
+      {/* ------------------ TRACKING CTA CARD (prominent) ------------------
+       Contains: ID, Shipped, Expected, Status pill, Status note, actions */}
+      {(() => {
+        const info = statusInfo[String(status || "").toLowerCase()] || null;
+        const shipped = data?.shipmentDate || data?.shippedDate || null;
+        const expected =
+          data?.destination?.expectedDeliveryDate ||
+          data?.expectedDeliveryDate ||
+          null;
 
-          {/* Shipment Summary Card */}
-          <div className="bg-gray-50 rounded p-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <Package size={14} />
-                <div>
-                  <div className="font-medium text-gray-800">
-                    {data?.productDescription || data?.product || "Product"}
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    {data?.serviceType ? `${data.serviceType}` : "Service: —"}
-                    {data?.shipmentDetails ? ` • ${data.shipmentDetails}` : ""}
-                  </div>
-                </div>
-              </div>
-              <div className="text-sm text-gray-600">
-                Qty: {data?.quantity ?? 1}
-              </div>
-            </div>
+        const pillClass =
+          status && String(status).toLowerCase().includes("deliver")
+            ? "status-delivered"
+            : status && String(status).toLowerCase().includes("ship")
+            ? "status-shipped"
+            : status && String(status).toLowerCase().includes("exception")
+            ? "status-exception"
+            : "status-pending";
 
-            <div className="mt-3 text-sm text-gray-600">
+        return (
+          <div className="tracking-cta card-modern p-5 mb-6">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              {/* ID */}
               <div>
-                <span className="font-medium text-gray-800">Weight:</span>{" "}
-                {data?.weightKg ? `${data.weightKg} kg` : "—"}
-              </div>
-              {data?.description && (
-                <div className="mt-1 text-xs text-gray-500">
-                  {data.description}
+                <div className="tracking-id-label text-sm text-gray-500">
+                  Tracking ID
                 </div>
-              )}
+                <div className="tracking-id-value font-semibold text-lg md:text-xl break-all">
+                  {id}
+                </div>
+              </div>
+
+              {/* shipped / expected / status */}
+              <div className="flex items-center gap-6">
+                <div className="tracking-meta text-center">
+                  <div className="meta-label">Shipped</div>
+                  <div className="meta-value">
+                    {shipped ? formatTime(shipped) : "—"}
+                  </div>
+                </div>
+
+                <div className="tracking-meta text-center">
+                  <div className="meta-label">Expected</div>
+                  <div className="meta-value">
+                    {expected ? formatTime(expected) : "—"}
+                  </div>
+                </div>
+
+                <div className="tracking-status">
+                  <span className={`status-pill ${pillClass}`}>{status}</span>
+                </div>
+              </div>
+
+              {/* actions */}
+              <div className="tracking-actions flex gap-2 justify-end">
+                <button
+                  className="btn-ghost"
+                  onClick={() => loadTracking && loadTracking()}
+                >
+                  Refresh
+                </button>
+                <button
+                  className="btn-ghost"
+                  onClick={() => copyId && copyId()}
+                >
+                  Copy ID
+                </button>
+                <button
+                  className="btn-primary"
+                  onClick={() => openExternal && openExternal()}
+                >
+                  Open
+                </button>
+              </div>
             </div>
 
-            <div className="mt-3">
-              <div className="text-xs text-gray-500">Current status</div>
-              <div
-                className={`mt-1 inline-block px-3 py-1 rounded-full text-sm font-medium ${
-                  status === "Delivered"
-                    ? "bg-green-100 text-green-800"
-                    : status === "Shipped"
-                    ? "bg-blue-100 text-blue-800"
-                    : "bg-yellow-100 text-yellow-800"
-                }`}
-              >
-                {status}
+            {/* status note INSIDE the card for immediate visibility */}
+            {info && (
+              <div className="tracking-status-note mt-4">
+                <div className="status-note-text">
+                  {info.text}
+                  {info.link && (
+                    <>
+                      {" "}
+                      <a href={info.link} className="underline text-white/90">
+                        Contact support
+                      </a>
+                      .
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* ------------------ MAIN GRID (aligned cards & map/timeline) ------------------ */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Left column: image + grouped cards (use card-modern + card-heading) */}
+        <div className="md:col-span-1 left-column">
+          {/* Product image */}
+          <div className="card-modern p-4">
+            <div className="media-wrap">
+              <img
+                src={imgSrc}
+                alt={
+                  data?.productDescription || data?.product || "Product image"
+                }
+                onError={() => setImgError(true)}
+                className="media-image"
+              />
+            </div>
+          </div>
+
+          {/* Shipment Summary */}
+          <div className="card-modern p-4">
+            <div className="card-heading">Shipment Summary</div>
+            <div className="card-body">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="icon-circle">
+                    <Package size={16} />
+                  </div>
+                  <div>
+                    <div className="text-base font-semibold text-gray-800">
+                      {data?.productDescription || data?.product || "Product"}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {data?.serviceType ? `${data.serviceType}` : "Service: —"}
+                      {data?.shipmentDetails
+                        ? ` • ${data.shipmentDetails}`
+                        : ""}
+                    </div>
+                  </div>
+                </div>
+                <div className="text-sm text-gray-600">
+                  Qty: {data?.quantity ?? 1}
+                </div>
+              </div>
+
+              <div className="mt-3 text-sm text-gray-600">
+                <div>
+                  <span className="font-medium text-gray-800">Weight:</span>{" "}
+                  {data?.weightKg ? `${data.weightKg} kg` : "—"}
+                </div>
+                {data?.description && (
+                  <div className="mt-1 text-xs text-gray-500">
+                    {data.description}
+                  </div>
+                )}
               </div>
             </div>
           </div>
 
-          {/* Progress Card */}
-          <div className="bg-white rounded p-3 border">
-            <div className="text-xs text-gray-500">Delivery Progress</div>
-            <div className="mt-2">
+          {/* Progress */}
+          <div className="card-modern p-4">
+            <div className="card-heading">Delivery Progress</div>
+            <div className="card-body">
               <ProgressBar progress={progress} status={status} />
-              <div className="text-xs text-gray-400 mt-1">
+              <div className="text-xs text-gray-400 mt-2">
                 {progress}% • Checkpoint{" "}
                 {Math.min(currentIndex + 1, route.length)} of{" "}
                 {route.length || "?"}
@@ -427,22 +574,18 @@ export default function TrackingPage() {
             </div>
           </div>
 
-          {/* Recipient Information Card */}
-          <div className="bg-white rounded p-3 border">
-            <h3 className="text-base font-semibold text-gray-700 mb-2">
-              Recipient Information
-            </h3>
-            <div className="text-sm text-gray-600 space-y-1">
+          {/* Recipient */}
+          <div className="card-modern p-4">
+            <div className="card-heading">Recipient Information</div>
+            <div className="card-body text-sm text-gray-600 space-y-2">
               <div>
                 <span className="font-medium text-gray-800">Name:</span>{" "}
                 {data?.destination?.receiverName || data?.customerName || "—"}
               </div>
-
               <div>
                 <span className="font-medium text-gray-800">Email:</span>{" "}
                 {data?.destination?.receiverEmail || "—"}
               </div>
-
               <div>
                 <span className="font-medium text-gray-800">Address:</span>{" "}
                 {data?.destination?.address?.full
@@ -459,7 +602,6 @@ export default function TrackingPage() {
                     } ${data.address.zip || ""}`
                   : "—"}
               </div>
-
               <div>
                 <span className="font-medium text-gray-800">Destination:</span>{" "}
                 {data?.route?.slice(-1)[0]?.city ||
@@ -470,17 +612,14 @@ export default function TrackingPage() {
             </div>
           </div>
 
-          {/* Origin / Sender Card */}
-          <div className="bg-white rounded p-3 border">
-            <h3 className="text-base font-semibold text-gray-700 mb-2">
-              Origin / Sender
-            </h3>
-            <div className="text-sm text-gray-600 space-y-1">
+          {/* Sender Information (renamed + modern heading) */}
+          <div className="card-modern p-4">
+            <div className="card-heading">Sender Information</div>
+            <div className="card-body text-sm text-gray-600 space-y-2">
               <div>
                 <span className="font-medium text-gray-800">Sender:</span>{" "}
                 {data?.origin?.name || data?.originWarehouse || "—"}
               </div>
-
               <div>
                 <span className="font-medium text-gray-800">
                   Sender Address:
@@ -495,7 +634,6 @@ export default function TrackingPage() {
                     } ${data.origin.address.zip || ""}`
                   : "—"}
               </div>
-
               <div>
                 <span className="font-medium text-gray-800">
                   Origin Location:
@@ -509,18 +647,16 @@ export default function TrackingPage() {
             </div>
           </div>
 
-          {/* Dates Card */}
-          <div className="bg-white rounded p-3 border">
-            <h3 className="text-sm font-semibold text-gray-700 mb-2">Dates</h3>
-
-            <div className="text-sm text-gray-600 space-y-1">
+          {/* Dates */}
+          <div className="card-modern p-4">
+            <div className="card-heading">Dates</div>
+            <div className="card-body text-sm text-gray-600 space-y-2">
               <div>
                 <span className="font-medium text-gray-800">Shipped:</span>{" "}
                 {data?.shipmentDate || data?.shippedDate
                   ? formatTime(data.shipmentDate || data.shippedDate)
                   : "—"}
               </div>
-
               <div>
                 <span className="font-medium text-gray-800">Expected:</span>{" "}
                 {data?.destination?.expectedDeliveryDate ||
@@ -535,29 +671,39 @@ export default function TrackingPage() {
           </div>
         </div>
 
-        {/* Middle + Right: route timeline and map */}
+        {/* Middle + Right: route timeline and map (kept content, restyled headers) */}
         <div className="md:col-span-2 space-y-6">
-          <div className="bg-white rounded-lg p-4 shadow-sm">
-            <h2 className="font-semibold mb-3">Route & Checkpoints</h2>
-            {route.length > 0 ? (
-              <RouteTimeline
-                route={routeToRender}
-                currentIndex={indexForRender}
-              />
-            ) : (
-              <div className="text-sm text-gray-500">
-                Route not available yet.
-              </div>
-            )}
+          <div className="card-modern p-4">
+            <div className="card-heading">Route & Checkpoints</div>
+            <div className="card-body">
+              {route.length > 0 ? (
+                <RouteTimeline
+                  route={routeToRender}
+                  currentIndex={indexForRender}
+                />
+              ) : (
+                <div className="text-sm text-gray-500">
+                  Route not available yet.
+                </div>
+              )}
+              {isWindowed && (
+                <div className="mt-3 text-right">
+                  <button
+                    className="btn-ghost"
+                    onClick={() => setShowAll((s) => !s)}
+                  >
+                    {showAll ? "Show window" : "Show full route"}
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
-          <div className="bg-white rounded-lg p-4 shadow-sm">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-semibold">Delivery Route Map</h2>
-            </div>
-            <div className="rounded overflow-hidden h-[420px] bg-gray-50">
-              {route.length > 0 ? (
-                <>
+          <div className="card-modern p-4">
+            <div className="card-heading">Delivery Route Map</div>
+            <div className="card-body">
+              <div className="rounded overflow-hidden h-[420px] bg-gray-50">
+                {route.length > 0 ? (
                   <RouteMap
                     route={routeToRender}
                     currentIndex={indexForRender}
@@ -565,39 +711,16 @@ export default function TrackingPage() {
                     prevLocation={prevLocation}
                     height={420}
                   />
-                </>
-              ) : (
-                <div className="h-full flex items-center justify-center text-gray-500">
-                  Map will appear when route data is available
-                </div>
-              )}
+                ) : (
+                  <div className="h-full flex items-center justify-center text-gray-500">
+                    Map will appear when route data is available
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
       </div>
-
-      {/* Status Note */}
-      {(() => {
-        const info = statusInfo[status.toLowerCase()];
-        if (!info) return null;
-        return (
-          <div className={`text-center mt-6 font-medium text-lg ${info.color}`}>
-            {info.text}
-            {info.link && (
-              <>
-                {" "}
-                <a
-                  href={info.link}
-                  className="underline text-blue-700 hover:text-blue-900"
-                >
-                  Contact support
-                </a>
-                .
-              </>
-            )}
-          </div>
-        );
-      })()}
     </motion.div>
   );
 }
