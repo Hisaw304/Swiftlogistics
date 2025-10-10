@@ -213,7 +213,7 @@ export default function AdminPage() {
     }
   }
 
-  // Replace your existing handleNext with this function
+  // Replace handleNext in AdminPage (frontend)
   async function handleNext(idOrTrackingId) {
     try {
       console.log("🧭 handleNext called with:", idOrTrackingId);
@@ -228,37 +228,37 @@ export default function AdminPage() {
 
       console.log("✅ Found record:", record.trackingId, record._id);
 
-      const id = encodeURIComponent(record.trackingId || String(record._id));
+      const nextIndex = (record.currentIndex ?? 0) + 1;
 
-      const ADMIN_KEY =
+      // Use the PATCH collection-level endpoint (this should already be working)
+      const adminKey =
         typeof window !== "undefined" ? localStorage.getItem("adminKey") : null;
-      if (!ADMIN_KEY) throw new Error("Missing admin key");
+      if (!adminKey) throw new Error("Missing admin key");
 
-      // Hardcode your live API base here:
-      const API_BASE = "https://swiftlogistics-mu.vercel.app";
-
-      // Call the backend route directly
-      const res = await fetch(`${API_BASE}/api/admin/records/${id}/next`, {
-        method: "POST",
+      const res = await fetch("/api/admin/records", {
+        method: "PATCH",
         headers: {
           "Content-Type": "application/json",
-          "x-admin-key": ADMIN_KEY,
+          "x-admin-key": adminKey,
         },
+        body: JSON.stringify({
+          trackingId: record.trackingId || String(record._id),
+          updates: { currentIndex: nextIndex },
+        }),
         cache: "no-store",
       });
 
       const body = await res.json().catch(() => null);
-
       if (!res.ok) {
         throw new Error(
           body?.error || JSON.stringify(body) || `HTTP ${res.status}`
         );
       }
 
-      // Server returns updated record
-      const updated = body;
+      // server returns either updatedRecord or doc — we trust returned doc
+      const updated = body.updatedRecord || body;
 
-      // Update UI state
+      // update UI state with returned document (normalize _id to string if needed)
       setRecords((prev) =>
         prev.map((r) => (r.trackingId === record.trackingId ? updated : r))
       );
