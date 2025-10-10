@@ -1,0 +1,151 @@
+/* tracking.css - modern card UI tokens (uses site root vars) */
+
+/* generic modern card */
+.card-modern {
+  background: #fff;
+  border-radius: 14px;
+  border: 2px solid var(--color-primary);
+  box-shadow: 0 12px 36px rgba(249, 115, 22, 0.07); /* soft orange shadow */
+  transition: transform 220ms ease, box-shadow 220ms ease;
+  overflow: hidden;
+}
+
+/* hover lift */
+.card-modern:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 22px 60px rgba(249, 115, 22, 0.12);
+}
+
+/* page title */
+.page-title {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+/* small utilities for header label (matches other sections) */
+.card-header {
+  padding-bottom: 0.5rem;
+}
+.card-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+.card-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* card-body spacing */
+.card-body {
+  padding-top: 0.5rem;
+  padding-left: 0.25rem;
+  padding-right: 0.25rem;
+}
+
+/* media image */
+.media-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 240px;
+  background: linear-gradient(
+    180deg,
+    rgba(243, 244, 246, 0.8),
+    rgba(255, 255, 255, 0.8)
+  );
+  border-radius: 8px;
+  overflow: hidden;
+}
+.media-image {
+  max-height: 100%;
+  max-width: 100%;
+  object-contain: cover;
+}
+
+/* icon circle */
+.icon-circle {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-accent);
+  color: var(--color-secondary);
+  border: 2px solid var(--color-primary);
+  box-shadow: 0 8px 22px rgba(16, 24, 40, 0.06);
+}
+
+/* status pill */
+.status-pill {
+  display: inline-block;
+  padding: 6px 10px;
+  border-radius: 9999px;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+.status-delivered {
+  background: #ecfdf5;
+  color: #166534;
+}
+.status-shipped {
+  background: #eff6ff;
+  color: #1e3a8a;
+}
+.status-pending {
+  background: #fffbeb;
+  color: #92400e;
+}
+
+/* alert card */
+.alert-card {
+  background: #fef2f2;
+  border: 1px solid #fee2e2;
+  color: #b91c1c;
+  border-radius: 12px;
+  padding: 16px;
+}
+
+/* buttons (small tokens) */
+.btn-primary {
+  background: var(--color-secondary);
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: none;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 8px 22px rgba(249, 115, 22, 0.12);
+}
+.btn-ghost {
+  background: transparent;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* responsive tweaks */
+@media (max-width: 768px) {
+  .media-wrap {
+    height: 160px;
+  }
+  .page-title {
+    font-size: 1.25rem;
+  }
+  .card-body {
+    padding: 0.5rem 0;
+  }
+}
+
+/* accessibility focus */
+.card-modern:focus-within {
+  outline: 3px solid rgba(99, 49, 129, 0.06);
+  outline-offset: 4px;
+}
