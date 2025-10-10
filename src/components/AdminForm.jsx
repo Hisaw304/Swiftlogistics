@@ -450,24 +450,19 @@ export default function AdminForm({
     }
   }
   // Automatically fetch coordinates for origin or destination
-  async function geocodeAddress(address, setLat, setLng) {
-    if (!address) return;
-
+  async function fetchCoordinates(address, setLat, setLng) {
     try {
-      const response = await fetch(
-        `https://api.openrouteservice.org/geocode/search?api_key=${
-          import.meta.env.VITE_ORS_API_KEY
-        }&text=${encodeURIComponent(address)}`
+      const res = await fetch(
+        `/api/geocode?address=${encodeURIComponent(address)}`
       );
-      const data = await response.json();
+      const data = await res.json();
 
-      if (data?.features?.length > 0) {
+      if (data?.features?.[0]?.geometry?.coordinates) {
         const [lng, lat] = data.features[0].geometry.coordinates;
-        setLat(lat.toFixed(6));
-        setLng(lng.toFixed(6));
-        console.log("Geocoded:", address, "→", lat, lng);
+        setLat(lat);
+        setLng(lng);
       } else {
-        console.warn("No coordinates found for:", address);
+        console.warn("No coordinates found for", address);
       }
     } catch (err) {
       console.error("Geocoding error:", err);
