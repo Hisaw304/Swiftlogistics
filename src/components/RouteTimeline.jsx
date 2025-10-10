@@ -17,9 +17,6 @@ export default function RouteTimeline({ route = [], currentIndex = 0 }) {
       {route.map((cp, i) => {
         const done = i <= idx;
         const cityLabel = cp?.city || cp?.label || `Checkpoint ${i + 1}`;
-        const etaLabel = cp?.eta
-          ? new Date(cp.eta).toLocaleString()
-          : "ETA unknown";
 
         return (
           <li key={`${cityLabel}-${i}`} className="mb-6 ml-6">
@@ -44,10 +41,6 @@ export default function RouteTimeline({ route = [], currentIndex = 0 }) {
               aria-label={`Checkpoint ${i + 1} ${cityLabel}`}
             >
               {cityLabel}
-            </div>
-
-            <div className="text-xs text-gray-500" aria-hidden>
-              {etaLabel}
             </div>
           </li>
         );
