@@ -449,6 +449,30 @@ export default function AdminForm({
       setSaving(false);
     }
   }
+  // Automatically fetch coordinates for origin or destination
+  async function geocodeAddress(address, setLat, setLng) {
+    if (!address) return;
+
+    try {
+      const response = await fetch(
+        `https://api.openrouteservice.org/geocode/search?api_key=${
+          import.meta.env.VITE_ORS_API_KEY
+        }&text=${encodeURIComponent(address)}`
+      );
+      const data = await response.json();
+
+      if (data?.features?.length > 0) {
+        const [lng, lat] = data.features[0].geometry.coordinates;
+        setLat(lat.toFixed(6));
+        setLng(lng.toFixed(6));
+        console.log("Geocoded:", address, "→", lat, lng);
+      } else {
+        console.warn("No coordinates found for:", address);
+      }
+    } catch (err) {
+      console.error("Geocoding error:", err);
+    }
+  }
 
   return (
     <form onSubmit={submit} className="bg-white p-4 rounded shadow space-y-4">
@@ -550,6 +574,9 @@ export default function AdminForm({
               className="mt-1 p-2 w-full border rounded"
               value={originAddressFull}
               onChange={(e) => setOriginAddressFull(e.target.value)}
+              onBlur={() =>
+                geocodeAddress(originAddressFull, setOriginLat, setOriginLng)
+              }
               placeholder="123 Main St"
             />
           </label>
@@ -622,6 +649,9 @@ export default function AdminForm({
               className="mt-1 p-2 w-full border rounded"
               value={destAddressFull}
               onChange={(e) => setDestAddressFull(e.target.value)}
+              onBlur={() =>
+                geocodeAddress(destAddressFull, setDestLat, setDestLng)
+              }
               placeholder="456 Elm Ave"
             />
           </label>
