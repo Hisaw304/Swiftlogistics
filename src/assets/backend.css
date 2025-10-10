@@ -1,209 +1,85 @@
-/* tracking-section.css
-   Modernized UI tokens for the Tracking section
-   Uses root variables:
-    --color-primary   (purple) - card border
-    --color-secondary (orange) - heading bg
-    --color-accent    (accent) - subtle fills/shadows
+/* tracking.css
+   Import in component: `import './tracking.css'`
+   Root variables (fallbacks) — adjust to match your design tokens if you already have them.
 */
+:root {
+  --trk-orange: #ff7a00; /* heading bg */
+  --trk-purple: #6b21a8; /* border / accent */
+  --trk-note-bg: #fff7ed; /* subtle note background */
+  /* keep compatibility with your existing color vars if used elsewhere */
+  --color-secondary: var(--trk-orange);
+  --color-primary: var(--trk-purple);
+}
 
-/* ---------- header ---------- */
-.tracking-h1 {
-  font-size: 1.9rem;
-  font-weight: 800;
-  color: var(--color-primary);
-  margin: 0;
+/* container tweaks */
+.tracking-container {
+}
+
+/* ensure the small decorative shapes pick the same orange */
+.tracking-container .shape rect,
+.tracking-container .shape circle {
+  fill: var(--color-secondary);
+}
+
+/* prominent CTA card */
+.tracking-cta,
+.trk-card {
+  border: 1px solid var(--trk-purple);
+  /* slight glassy white to separate from page */
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.98),
+    rgba(255, 255, 255, 0.96)
+  );
+  box-shadow: 0 8px 22px rgba(107, 33, 168, 0.06);
+}
+
+/* inline small heading used inside CTA */
+.card-heading-inline {
+  display: inline-block;
+  background: transparent;
+  color: var(--trk-purple);
+  font-weight: 700;
+  font-size: 0.75rem;
+}
+
+/* orange chip-style headings used across cards */
+.card-heading {
+  display: inline-block;
+  background: var(--trk-orange);
+  color: #fff;
+  padding: 0.22rem 0.5rem;
+  border-radius: 0.375rem;
+  font-weight: 600;
+  font-size: 0.78rem;
+}
+
+/* status-note style inside CTA */
+.trk-status-note {
+  background: var(--trk-note-bg);
+  border-left: 4px solid var(--trk-purple);
+}
+
+/* slightly larger important text inside CTA */
+.tracking-cta .text-lg,
+.tracking-cta .text-xl {
   letter-spacing: -0.01em;
 }
 
-/* ---------- card base ---------- */
-.card-modern {
-  background: #fff;
-  border-radius: 12px;
-  border: 2px solid var(--color-primary);
-  box-shadow: 0 14px 44px rgba(249, 115, 22, 0.08); /* soft orange shadow */
-  transition: transform 220ms ease, box-shadow 220ms ease;
-  overflow: hidden;
-}
-.card-modern:hover {
-  transform: translateY(-6px);
-  box-shadow: 0 22px 60px rgba(249, 115, 22, 0.12);
+/* ensure card borders stronger than default tailwind borders */
+.trk-card {
+  border-width: 1px;
+  border-style: solid;
+  border-color: var(--trk-purple) !important;
 }
 
-/* ---------- card heading pill ---------- */
-.card-heading {
-  display: inline-block;
-  background: var(--color-secondary);
-  color: #fff;
-  padding: 6px 10px;
-  border-radius: 8px;
-  font-weight: 700;
-  font-size: 0.95rem;
-  margin-bottom: 0.6rem;
-}
-
-/* ensure old H3 inside cards pick the same style if you keep them */
-.card-modern h3 {
-  display: inline-block;
-  background: var(--color-secondary);
-  color: #fff;
-  padding: 6px 10px;
-  border-radius: 8px;
-  font-weight: 700;
-  margin-bottom: 0.6rem;
-}
-
-/* ---------- card body ---------- */
-.card-body {
-  padding-top: 0.25rem;
-}
-
-/* ---------- media image ---------- */
-.media-wrap {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 220px;
-  background: linear-gradient(
-    180deg,
-    rgba(243, 244, 246, 1),
-    rgba(255, 255, 255, 1)
-  );
-  border-radius: 8px;
-  overflow: hidden;
-}
-.media-image {
-  max-height: 100%;
-  max-width: 100%;
-  object-fit: contain;
-}
-
-/* ---------- icon circle ---------- */
-.icon-circle {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--color-accent);
-  color: var(--color-secondary);
-  border: 2px solid var(--color-primary);
-  box-shadow: 0 8px 22px rgba(16, 24, 40, 0.06);
-}
-
-/* ---------- tracking CTA ---------- */
-.tracking-cta {
-  border-radius: 14px;
-}
-
-/* tracking ID styles */
-.tracking-id-label {
-  font-size: 0.85rem;
-  color: #6b7280;
-}
-.tracking-id-value {
-  font-size: 1.05rem;
-  color: #0f172a;
-  font-weight: 700;
-}
-
-/* meta labels and values */
-.meta-label {
-  font-size: 0.72rem;
-  color: #6b7280;
-  margin-bottom: 0.2rem;
-}
-.meta-value {
-  font-size: 0.95rem;
-  color: #0f172a;
-  font-weight: 700;
-}
-
-/* ---------- status pill ---------- */
-.status-pill {
-  padding: 6px 12px;
-  border-radius: 9999px;
-  font-weight: 700;
-  font-size: 0.9rem;
-  display: inline-block;
-  border: 1px solid rgba(0, 0, 0, 0.04);
-}
-.status-delivered {
-  background: #ecfdf5;
-  color: #166534;
-  border-color: rgba(16, 185, 129, 0.12);
-}
-.status-shipped {
-  background: #eff6ff;
-  color: #1e3a8a;
-  border-color: rgba(59, 130, 246, 0.12);
-}
-.status-exception {
-  background: #fef2f2;
-  color: #991b1b;
-  border-color: rgba(239, 68, 68, 0.1);
-}
-.status-pending {
-  background: #fffbeb;
-  color: #92400e;
-  border-color: rgba(234, 88, 12, 0.06);
-}
-
-/* ---------- status note (inside CTA) ---------- */
-.tracking-status-note {
-  margin-top: 0.6rem;
-  padding: 10px 12px;
-  background: linear-gradient(
-    90deg,
-    rgba(249, 115, 22, 0.95),
-    rgba(249, 115, 22, 0.82)
-  );
-  color: #fff;
-  border-radius: 8px;
-  font-weight: 600;
-  font-size: 0.95rem;
-}
-.tracking-status-note a {
-  color: rgba(255, 255, 255, 0.95);
-  text-decoration: underline;
-}
-
-/* ---------- buttons ---------- */
-.btn-primary {
-  background: var(--color-secondary);
-  color: #fff;
-  padding: 8px 12px;
-  border-radius: 10px;
-  border: none;
-  font-weight: 700;
-  cursor: pointer;
-  box-shadow: 0 8px 22px rgba(249, 115, 22, 0.12);
-}
-.btn-ghost {
-  background: transparent;
-  border: 1px solid rgba(15, 23, 42, 0.06);
-  padding: 8px 10px;
-  border-radius: 10px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-/* ---------- layout helpers ---------- */
-.left-column {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-/* responsive */
+/* subtle responsive adjustments */
 @media (max-width: 768px) {
-  .media-wrap {
-    height: 160px;
-  }
-  .tracking-h1 {
-    font-size: 1.4rem;
-  }
   .tracking-cta {
     padding: 1rem;
+  }
+  .card-heading {
+    font-size: 0.72rem;
+    padding: 0.18rem 0.45rem;
   }
 }
