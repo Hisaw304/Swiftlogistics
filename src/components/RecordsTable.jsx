@@ -60,11 +60,13 @@ export default function RecordsTable({
         <tbody>
           {records.map((r) => {
             const currentCity =
-              r.route &&
-              typeof r.currentIndex === "number" &&
-              r.route[r.currentIndex]
-                ? r.route[r.currentIndex].city
-                : "—";
+              (r.route &&
+                typeof r.currentIndex === "number" &&
+                r.route[r.currentIndex] &&
+                r.route[r.currentIndex].city) ||
+              r.destination?.address?.city ||
+              r.destination?.city ||
+              "—";
 
             // Prefer server-provided progressPct; fallback to compute
             const progress =
