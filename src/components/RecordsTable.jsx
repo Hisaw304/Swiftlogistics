@@ -85,8 +85,13 @@ export default function RecordsTable({
                 <td className="px-3 py-2 align-top">
                   <div className="font-mono text-xs">{r.trackingId}</div>
                 </td>
-                <td className="px-3 py-2 align-top">{r.customerName || "—"}</td>
-                <td className="px-3 py-2 align-top">{r.product}</td>
+                <td className="px-3 py-2 align-top">
+                  {r.customerName || r.destination?.receiverName || "—"}
+                </td>
+
+                <td className="px-3 py-2 align-top">
+                  {r.product || r.productDescription || "—"}
+                </td>
                 <td className="px-3 py-2 align-top">{currentCity}</td>
                 <td className="px-3 py-2 align-top">
                   <div>{r.status}</div>
