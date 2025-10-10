@@ -235,21 +235,18 @@ export default function AdminPage() {
         typeof window !== "undefined" ? localStorage.getItem("adminKey") : null;
       if (!adminKey) throw new Error("Missing admin key");
 
-      const res = await fetch(
-        `/api/admin/records/${record.trackingId || record._id}`,
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            "x-admin-key": adminKey,
-          },
-          body: JSON.stringify({
-            trackingId: record.trackingId || String(record._id),
-            updates: { currentIndex: nextIndex },
-          }),
-          cache: "no-store",
-        }
-      );
+      const res = await fetch("/api/admin/records", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-key": adminKey,
+        },
+        body: JSON.stringify({
+          trackingId: record.trackingId || String(record._id),
+          updates: { currentIndex: nextIndex },
+        }),
+        cache: "no-store",
+      });
 
       const body = await res.json().catch(() => null);
       if (!res.ok) {
