@@ -462,7 +462,10 @@ export default function TrackingPage() {
 
               <div>
                 <span className="font-medium text-gray-800">Destination:</span>{" "}
-                {data?.route?.slice(-1)[0]?.city || "—"}
+                {data?.route?.slice(-1)[0]?.city ||
+                  data?.destination?.address?.city ||
+                  data?.destination?.city ||
+                  "—"}
               </div>
             </div>
           </div>
