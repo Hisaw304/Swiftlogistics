@@ -1,7 +1,7 @@
 // pages/api/admin/records/index.js
-import { connectToDatabase } from "../../../shared/mongo.js";
+import { connectToDatabase } from "../../shared/mongo.js";
 import { randomUUID } from "crypto";
-import { generateRoute } from "../routeGenerator.js";
+import { generateRoute } from "./routeGenerator.js";
 import { ObjectId } from "mongodb";
 
 /**
