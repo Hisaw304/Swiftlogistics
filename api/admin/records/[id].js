@@ -8,6 +8,7 @@ const ADMIN = (req) => {
 };
 
 export default async function handler(req, res) {
+  // CORS + basic headers
   const CORS_HEADERS = {
     "Access-Control-Allow-Origin": "https://swiftlogistics-mu.vercel.app",
     "Access-Control-Allow-Methods": "GET,POST,PATCH,DELETE,OPTIONS",
@@ -20,82 +21,12 @@ export default async function handler(req, res) {
 
   if (req.method === "OPTIONS") return res.status(204).end();
   if (!ADMIN(req)) return res.status(401).json({ error: "Unauthorized" });
-  // ✅ Handle POST /api/admin/records/:id/next
-  if (req.method === "POST" && req.url && req.url.endsWith("/next")) {
-    try {
-      const { db } = await connectToDatabase();
-      const col = db.collection("trackings");
 
-      const rec = await col.findOne(
-        ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { trackingId: id }
-      );
-      if (!rec) return res.status(404).json({ error: "Not found" });
-
-      const currentIndex = Number.isFinite(Number(rec.currentIndex))
-        ? Number(rec.currentIndex)
-        : 0;
-      const lastIndex = (rec.route || []).length - 1;
-      if (currentIndex >= lastIndex)
-        return res.status(400).json({ error: "Already at final checkpoint" });
-
-      const newIndex = currentIndex + 1;
-      const checkpoint = (rec.route || [])[newIndex] || null;
-      const now = new Date().toISOString();
-
-      const historyEntry = {
-        timestamp: now,
-        location: checkpoint
-          ? checkpoint.location
-          : rec.currentLocation || null,
-        city: checkpoint ? checkpoint.city : null,
-        note: "Arrived checkpoint",
-        by: "admin",
-      };
-
-      const newStatus =
-        newIndex === lastIndex
-          ? "Delivered"
-          : rec.status === "Pending"
-          ? "Shipped"
-          : rec.status;
-
-      await col.updateOne(
-        ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { trackingId: id },
-        {
-          $set: {
-            currentIndex: newIndex,
-            currentLocation: checkpoint
-              ? checkpoint.location
-              : rec.currentLocation || null,
-            status: newStatus,
-            updatedAt: now,
-            lastUpdated: now,
-          },
-          $push: { locationHistory: historyEntry },
-        }
-      );
-
-      const updated = await col.findOne(
-        ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { trackingId: id }
-      );
-      if (updated._id && typeof updated._id !== "string")
-        updated._id = updated._id.toString();
-
-      return res.status(200).json(updated);
-    } catch (err) {
-      console.error("NEXT (merged) error:", err);
-      return res
-        .status(500)
-        .json({ error: "Internal error", detail: String(err) });
-    }
-  }
-
-  // resolve id param (Next gives it as req.query.id for /api/admin/records/[id])
+  // ---- resolve id param early so all branches can use it safely ----
   let id = undefined;
   if (req.query && req.query.id) {
     id = String(req.query.id);
   } else {
-    // fallback: try to parse last path segment, but keep minimal and safe
     try {
       const url = req.url || "";
       const parts = url.split("/").filter(Boolean);
@@ -113,11 +44,12 @@ export default async function handler(req, res) {
     }
   }
   if (id === "undefined" || id === "null" || id === "") id = undefined;
+  // ------------------------------------------------------------------
 
   const { db } = await connectToDatabase();
   const col = db.collection("trackings");
 
-  // GET (unchanged)
+  // -------------------- GET by id or trackingId --------------------
   if (req.method === "GET") {
     const filters = [];
     try {
@@ -134,7 +66,7 @@ export default async function handler(req, res) {
     return res.json(doc);
   }
 
-  // PATCH — accept new nested fields and recompute progressPct
+  // -------------------- PATCH — update fields (collection-level) --------------------
   if (req.method === "PATCH") {
     if (!id)
       return res
@@ -297,23 +229,18 @@ export default async function handler(req, res) {
     }
   }
 
-  // DELETE etc omitted for brevity (keep your existing implementation)
-  // DELETE — remove by trackingId or _id
+  // -------------------- DELETE --------------------
   if (req.method === "DELETE") {
-    // Accept id param from path or query
     const idParam = id || (req.query && req.query.id) || null;
     if (!idParam) {
       return res.status(400).json({ error: "Missing id in path or query" });
     }
 
-    // build robust query for trackingId or _id
     const q = { $or: [{ trackingId: String(idParam) }] };
     try {
       if (ObjectId.isValid(String(idParam)))
         q.$or.push({ _id: new ObjectId(String(idParam)) });
-    } catch (e) {
-      // ignore invalid ObjectId
-    }
+    } catch (e) {}
 
     try {
       const result = await col.findOneAndDelete(q);
