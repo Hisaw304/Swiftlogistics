@@ -111,7 +111,7 @@ export default async function handler(req, res) {
         for (let i = 0; i < 12; i++) {
           id += chars.charAt(Math.floor(Math.random() * chars.length));
         }
-        return "*" + id;
+        return id;
       }
 
       const trackingId =
