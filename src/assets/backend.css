@@ -224,6 +224,7 @@ textarea.form-input:focus {
   border: 2px solid var(--color-primary);
   border-radius: 0.6rem;
   overflow: hidden;
+  overflow-x: auto; /* 👈 add this line */
   /* subtle lift */
   box-shadow: 0 8px 26px rgba(0, 0, 0, 0.04);
 }
