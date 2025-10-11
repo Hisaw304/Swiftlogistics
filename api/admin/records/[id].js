@@ -3,12 +3,23 @@ import { ObjectId } from "mongodb";
 import { connectToDatabase } from "../../shared/mongo.js";
 
 const ADMIN = (req) => {
-  const key = req.headers["x-admin-key"] || req.query?.adminKey;
+  const key = req.headers["x-admin-key"] || req.query?.adminKey || null;
   return key && key === process.env.ADMIN_KEY;
 };
 
+function safeToIso(d) {
+  if (!d) return null;
+  try {
+    const dd = new Date(d);
+    if (isNaN(dd.getTime())) return null;
+    return dd.toISOString();
+  } catch {
+    return null;
+  }
+}
+
 export default async function handler(req, res) {
-  // CORS + basic headers
+  // ---- CORS + base headers ----
   const CORS_HEADERS = {
     "Access-Control-Allow-Origin": "https://swiftlogistics-mu.vercel.app",
     "Access-Control-Allow-Methods": "GET,POST,PATCH,DELETE,OPTIONS",
@@ -20,42 +31,66 @@ export default async function handler(req, res) {
   res.setHeader("Pragma", "no-cache");
 
   if (req.method === "OPTIONS") return res.status(204).end();
-  if (!ADMIN(req)) return res.status(401).json({ error: "Unauthorized" });
 
-  // ---- resolve id param early so all branches can use it safely ----
-  let id = undefined;
-  if (req.query && req.query.id) {
-    id = String(req.query.id);
-  } else {
-    try {
-      const url = req.url || "";
-      const parts = url.split("/").filter(Boolean);
-      const idx = parts.lastIndexOf("records");
-      if (idx >= 0 && parts.length > idx + 1) {
-        id = parts
-          .slice(idx + 1)
-          .join("/")
-          .split("?")[0];
-      } else if (parts.length) {
-        id = parts[parts.length - 1].split("?")[0];
-      }
-    } catch (e) {
-      id = undefined;
-    }
+  // Auth
+  if (!ADMIN(req)) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  // ---- Resolve id param early so all branches can use it safely ----
+  let id;
+  try {
+    // Prefer parsed query (Next may provide it), else derive from URL
+    id =
+      req.query?.id ||
+      (() => {
+        const url = req.url || "";
+        const parts = url.split("/").filter(Boolean);
+        // try to find 'records' then the next segment(s)
+        const idx = parts.lastIndexOf("records");
+        if (idx >= 0 && parts.length > idx + 1) {
+          // join the remainder (handles /records/:id and /records/:id/...)
+          return decodeURIComponent(
+            parts
+              .slice(idx + 1)
+              .join("/")
+              .split("?")[0]
+          );
+        }
+        // fallback to last segment
+        return decodeURIComponent(
+          parts.length ? parts[parts.length - 1].split("?")[0] : ""
+        );
+      })();
+  } catch (e) {
+    id = undefined;
   }
   if (id === "undefined" || id === "null" || id === "") id = undefined;
-  // ------------------------------------------------------------------
 
-  const { db } = await connectToDatabase();
+  // connect DB
+  let conn;
+  try {
+    conn = await connectToDatabase();
+  } catch (dbErr) {
+    console.error(
+      "DB connection failed:",
+      dbErr && dbErr.stack ? dbErr.stack : String(dbErr)
+    );
+    return res
+      .status(500)
+      .json({ error: "Database connection failed", detail: String(dbErr) });
+  }
+  const { db } = conn;
   const col = db.collection("trackings");
 
   // -------------------- GET by id or trackingId --------------------
   if (req.method === "GET") {
     const filters = [];
     try {
-      if (ObjectId.isValid(id)) filters.push({ _id: new ObjectId(id) });
+      if (id && ObjectId.isValid(id)) filters.push({ _id: new ObjectId(id) });
     } catch {}
     if (id) filters.push({ trackingId: id });
+
     let doc = null;
     for (const f of filters) {
       doc = await col.findOne(f);
@@ -66,7 +101,7 @@ export default async function handler(req, res) {
     return res.json(doc);
   }
 
-  // -------------------- PATCH — update fields (collection-level) --------------------
+  // -------------------- PATCH — update fields (per-record) --------------------
   if (req.method === "PATCH") {
     if (!id)
       return res
@@ -81,6 +116,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Invalid JSON body" });
     }
 
+    // fields allowed to be set directly
     const allowedTop = [
       "serviceType",
       "shipmentDetails",
@@ -109,6 +145,7 @@ export default async function handler(req, res) {
 
     const now = new Date().toISOString();
 
+    // Build query to find by _id or trackingId
     const orClauses = [];
     try {
       if (ObjectId.isValid(id)) orClauses.push({ _id: new ObjectId(id) });
@@ -118,7 +155,7 @@ export default async function handler(req, res) {
     const rec = await col.findOne({ $or: orClauses });
     if (!rec) return res.status(404).json({ error: "Not found" });
 
-    // normalize existing index
+    // --- Recompute derived fields similar to original logic ---
     const existingIndex = Number.isFinite(Number(rec.currentIndex))
       ? Number(rec.currentIndex)
       : 0;
@@ -231,19 +268,22 @@ export default async function handler(req, res) {
 
   // -------------------- DELETE --------------------
   if (req.method === "DELETE") {
+    // id was already resolved above
     const idParam = id || (req.query && req.query.id) || null;
     if (!idParam) {
       return res.status(400).json({ error: "Missing id in path or query" });
     }
 
-    const q = { $or: [{ trackingId: String(idParam) }] };
     try {
-      if (ObjectId.isValid(String(idParam)))
-        q.$or.push({ _id: new ObjectId(String(idParam)) });
-    } catch (e) {}
+      // prefer _id if it's a valid ObjectId to avoid ambiguous $or issues
+      let query;
+      if (ObjectId.isValid(String(idParam))) {
+        query = { _id: new ObjectId(String(idParam)) };
+      } else {
+        query = { trackingId: String(idParam) };
+      }
 
-    try {
-      const result = await col.findOneAndDelete(q);
+      const result = await col.findOneAndDelete(query);
       if (!result.value) {
         return res.status(404).json({ error: "Record not found" });
       }
@@ -259,5 +299,6 @@ export default async function handler(req, res) {
     }
   }
 
+  // fallback
   return res.status(405).json({ error: "Method not allowed" });
 }
