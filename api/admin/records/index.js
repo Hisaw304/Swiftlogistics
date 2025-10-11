@@ -1,6 +1,6 @@
 // pages/api/admin/records/index.js
 import { connectToDatabase } from "../../shared/mongo.js";
-import { randomUUID } from "crypto";
+
 import { generateRoute } from "./routeGenerator.js";
 import { ObjectId } from "mongodb";
 
@@ -105,8 +105,18 @@ export default async function handler(req, res) {
       }
 
       const now = new Date().toISOString();
+      function generateTrackingId() {
+        const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        let id = "";
+        for (let i = 0; i < 12; i++) {
+          id += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return "*" + id;
+      }
+
       const trackingId =
-        (body.trackingId && String(body.trackingId).trim()) || randomUUID();
+        (body.trackingId && String(body.trackingId).trim()) ||
+        generateTrackingId();
 
       // helpers
       const safeStr = (v) =>
