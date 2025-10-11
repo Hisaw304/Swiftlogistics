@@ -172,7 +172,6 @@ export default function AdminPage() {
       await loadRecords();
     } catch (err) {
       console.error("Delete failed:", err);
-      alert("Delete failed: " + (err.message || String(err)));
     }
   }
 
