@@ -10,15 +10,25 @@
       "src": "/api/admin/records/([^/]+)$",
       "dest": "/api/admin/records/[id].js"
     },
-    {
-      "src": "/api/admin/records/([^/]+)/location$",
-      "dest": "/api/admin/records/[id].location.js"
-    },
+
     {
       "src": "/api/admin/records/([^/]+)/next$",
       "dest": "/api/admin/records/[id]/next.js"
     },
-    { "src": "/api/(.*)", "dest": "/api/$1" },
-    { "src": "/(.*)", "dest": "/index.html" }
+
+    {
+      "src": "/api/admin/records/([^/]+)/location$",
+      "dest": "/api/admin/records/[id]/location.js"
+    },
+
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/$1"
+    },
+
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
   ]
 }
