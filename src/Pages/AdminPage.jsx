@@ -253,13 +253,12 @@ export default function AdminPage() {
         typeof window !== "undefined" ? localStorage.getItem("adminKey") : null;
       if (!adminKey) throw new Error("Missing admin key");
 
-      const nextIndex = (record.currentIndex ?? 0) + 1;
-      const res = await apiFetch("/api/admin/records", {
-        method: "PATCH",
-        body: JSON.stringify({
-          trackingId: record.trackingId || String(record._id),
-          updates: { currentIndex: nextIndex },
-        }),
+      // 🧠 Instead of PATCH, we now POST to the specific "next" endpoint
+      const res = await fetch(`/api/admin/records/${record.trackingId}/next`, {
+        method: "POST",
+        headers: {
+          "x-admin-key": adminKey,
+        },
       });
 
       const text = await res.text().catch(() => "");
@@ -271,14 +270,13 @@ export default function AdminPage() {
       }
 
       if (!res.ok) {
-        console.error("Server PATCH responded non-ok:", res.status, body);
+        console.error("Server responded non-ok:", res.status, body);
         throw new Error(
           body?.error || JSON.stringify(body) || `HTTP ${res.status}`
         );
       }
 
       const updated = body.updatedRecord || body;
-      // normalize id to string
       if (updated && updated._id && typeof updated._id !== "string") {
         try {
           updated._id = updated._id.toString();
@@ -296,7 +294,7 @@ export default function AdminPage() {
         )
       );
 
-      console.log("✅ moved to next (via PATCH):", updated);
+      console.log("✅ moved to next checkpoint:", updated);
       return updated;
     } catch (err) {
       console.error("❌ Update failed (handleNext):", err);
