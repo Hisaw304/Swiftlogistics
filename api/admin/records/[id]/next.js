@@ -32,8 +32,15 @@ export default async function handler(req, res) {
   }
 
   // Resolve id param directly from req.query.id (Next dynamic route)
-  const id = req.query?.id;
-  if (!id) return res.status(400).json({ error: "Missing id param" });
+  // inside api/admin/records/[id]/next.js
+
+  // Resolve id param manually if missing
+  const id =
+    req.query?.id || req.url.split("/").filter(Boolean).slice(-2, -1)[0];
+
+  if (!id) {
+    return res.status(400).json({ error: "Missing id param" });
+  }
 
   let conn;
   try {
