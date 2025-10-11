@@ -34,9 +34,10 @@ export default function AdminPage() {
 
   // central fetch that always attaches adminKey from state
   // central fetch that always attaches adminKey from localStorage (reliably)
+  // central fetch that always attaches adminKey from localStorage (reliably)
   async function apiFetch(path, opts = {}) {
     const headers = (opts.headers = opts.headers || {});
-    // ALWAYS read from localStorage so we don't rely on stale closure state
+    // ALWAYS read from localStorage to avoid stale closure values
     const key =
       typeof window !== "undefined"
         ? localStorage.getItem("adminKey") || ""
@@ -252,19 +253,13 @@ export default function AdminPage() {
         typeof window !== "undefined" ? localStorage.getItem("adminKey") : null;
       if (!adminKey) throw new Error("Missing admin key");
 
-      // Use PATCH collection endpoint (single reliable path)
       const nextIndex = (record.currentIndex ?? 0) + 1;
-      const res = await fetch("/api/admin/records", {
+      const res = await apiFetch("/api/admin/records", {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          "x-admin-key": adminKey,
-        },
         body: JSON.stringify({
           trackingId: record.trackingId || String(record._id),
           updates: { currentIndex: nextIndex },
         }),
-        cache: "no-store",
       });
 
       const text = await res.text().catch(() => "");
@@ -283,6 +278,12 @@ export default function AdminPage() {
       }
 
       const updated = body.updatedRecord || body;
+      // normalize id to string
+      if (updated && updated._id && typeof updated._id !== "string") {
+        try {
+          updated._id = updated._id.toString();
+        } catch {}
+      }
 
       setRecords((prev) =>
         prev.map((r) =>
@@ -290,7 +291,7 @@ export default function AdminPage() {
           (r.trackingId &&
             updated.trackingId &&
             r.trackingId === updated.trackingId)
-            ? updated
+            ? { ...r, ...updated }
             : r
         )
       );

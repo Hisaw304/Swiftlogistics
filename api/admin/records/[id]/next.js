@@ -15,7 +15,14 @@ export default async function handler(req, res) {
   );
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type,x-admin-key");
+  res.setHeader("Content-Type", "application/json");
   if (req.method === "OPTIONS") return res.status(204).end();
+
+  console.log("NEXT handler hit:", {
+    method: req.method,
+    url: req.url,
+    headers: { "x-admin-key": req.headers["x-admin-key"] },
+  });
 
   if (!requireAdmin(req)) {
     return res.status(401).json({ error: "Unauthorized" });

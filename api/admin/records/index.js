@@ -65,6 +65,7 @@ export default async function handler(req, res) {
     const col = db.collection("trackings");
 
     // === GET: list with pagination ===
+    // === GET: list with pagination ===
     if (req.method === "GET") {
       const page = Math.max(1, parseInt(req.query.page || "1", 10));
       const limit = Math.max(
@@ -79,7 +80,13 @@ export default async function handler(req, res) {
           .sort({ createdAt: -1 })
           .skip(skip)
           .limit(limit);
-        const items = await cursor.toArray();
+        let items = await cursor.toArray();
+        // normalize _id to string for client consistency
+        items = items.map((it) => ({
+          ...it,
+          _id:
+            it._id && typeof it._id !== "string" ? it._id.toString() : it._id,
+        }));
         const total = await col.countDocuments();
         return res.json({ items, total, page, limit });
       } catch (err) {
@@ -377,6 +384,7 @@ export default async function handler(req, res) {
     }
 
     // === PATCH ===
+    // === PATCH ===
     if (req.method === "PATCH") {
       let body = {};
       try {
@@ -388,24 +396,49 @@ export default async function handler(req, res) {
 
       const { trackingId, updates } = body;
 
-      if (!trackingId) {
+      const trackingIdRaw = trackingId ? String(trackingId).trim() : null;
+      console.log(
+        "PATCH /api/admin/records called. trackingId:",
+        trackingIdRaw,
+        "updates:",
+        updates
+      );
+
+      if (!trackingIdRaw) {
         return res.status(400).json({ error: "trackingId required" });
       }
 
       const now = new Date();
 
-      // build a safe query for either trackingId or _id
-      let query = { $or: [{ trackingId }] };
+      // build a tolerant query: exact trackingId, case-insensitive trackingId, or ObjectId
+      const orClauses = [];
+      orClauses.push({ trackingId: trackingIdRaw });
+      // Escape regex specials in trackingIdRaw for safe regex use
+      const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      orClauses.push({
+        trackingId: {
+          $regex: `^${escapeRegex(trackingIdRaw)}$`,
+          $options: "i",
+        },
+      });
       try {
-        query.$or.push({ _id: new ObjectId(trackingId) });
+        if (ObjectId.isValid(trackingIdRaw)) {
+          orClauses.push({ _id: new ObjectId(trackingIdRaw) });
+        }
       } catch {
-        // ignore invalid ObjectId
+        /* ignore */
       }
+
+      const query = { $or: orClauses };
 
       try {
         // Fetch existing doc to recompute derived fields reliably
         const existing = await col.findOne(query);
         if (!existing) {
+          console.log(
+            "PATCH: no document matched query:",
+            JSON.stringify(query)
+          );
           return res.status(404).json({ error: "Record not found" });
         }
 
@@ -527,43 +560,42 @@ export default async function handler(req, res) {
     }
 
     // === DELETE: remove a record by trackingId or _id ===
+    // -------------------- DELETE --------------------
     if (req.method === "DELETE") {
-      // Accept id in body or query: { trackingId } or ?id=
-      let body = {};
-      try {
-        body =
-          typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
-      } catch {
-        body = {};
+      const idParam = id || (req.query && req.query.id) || null;
+      if (!idParam) {
+        return res.status(400).json({ error: "Missing id in path or query" });
       }
 
-      const trackingId = String(
-        req.query.id || body.trackingId || body.id || ""
-      ).trim();
-      if (!trackingId) {
-        return res.status(400).json({ error: "trackingId (or id) required" });
-      }
+      console.log("[DELETE] resolved idParam:", idParam);
 
-      const query = { $or: [{ trackingId }] };
+      const orClauses = [{ trackingId: String(idParam) }];
       try {
-        query.$or.push({ _id: new ObjectId(trackingId) });
-      } catch {
-        // ignore invalid ObjectId
-      }
+        if (ObjectId.isValid(String(idParam))) {
+          orClauses.push({ _id: new ObjectId(String(idParam)) });
+        }
+      } catch (e) {}
+      // case-insensitive trackingId fallback
+      const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      orClauses.push({
+        trackingId: {
+          $regex: `^${escapeRegex(String(idParam))}$`,
+          $options: "i",
+        },
+      });
 
       try {
-        const result = await col.findOneAndDelete(query);
+        const result = await col.findOneAndDelete({ $or: orClauses });
         if (!result.value) {
+          console.log("[DELETE] no document matched:", orClauses);
           return res.status(404).json({ error: "Record not found" });
         }
-        return res
-          .status(200)
-          .json({ message: "Record deleted", deleted: result.value });
+        const deleted = result.value;
+        if (deleted._id && typeof deleted._id !== "string")
+          deleted._id = deleted._id.toString();
+        return res.status(200).json({ message: "Record deleted", deleted });
       } catch (err) {
-        console.error(
-          "DELETE error:",
-          err && err.stack ? err.stack : String(err)
-        );
+        console.error("DELETE /api/admin/records/[id] error:", err);
         return res
           .status(500)
           .json({ error: "Delete failed", detail: String(err) });
