@@ -226,49 +226,114 @@ export default function AdminPage() {
 
       console.log("✅ Found record:", record.trackingId, record._id);
 
-      const nextIndex = (record.currentIndex ?? 0) + 1;
-
       const adminKey =
         typeof window !== "undefined" ? localStorage.getItem("adminKey") : null;
       if (!adminKey) throw new Error("Missing admin key");
 
-      const res = await fetch("/api/admin/records", {
+      // prefer calling the dedicated endpoint
+      const idForRoute = encodeURIComponent(
+        record.trackingId || String(record._id)
+      );
+      let res;
+      try {
+        res = await fetch(`/api/admin/records/${idForRoute}/next`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-admin-key": adminKey,
+          },
+          cache: "no-store",
+        });
+      } catch (err) {
+        console.warn("Calling /next endpoint failed to reach server:", err);
+        res = null;
+      }
+
+      // If /next endpoint responded, parse and handle it
+      if (res) {
+        const text = await res.text().catch(() => "");
+        let body = null;
+        try {
+          body = text ? JSON.parse(text) : null;
+        } catch (e) {
+          body = text;
+        }
+
+        if (!res.ok) {
+          console.error("Server /next responded non-ok:", res.status, body);
+          // If 404 on /next, fall back to PATCH below
+          if (res.status !== 404) {
+            throw new Error(
+              body?.error || JSON.stringify(body) || `HTTP ${res.status}`
+            );
+          }
+        } else {
+          const updated = body;
+          // normalize _id/trackingId may be handled server-side; update local state robustly
+          setRecords((prev) =>
+            prev.map((r) =>
+              String(r._id) === String(updated._id) ||
+              r.trackingId === updated.trackingId
+                ? updated
+                : r
+            )
+          );
+          console.log(
+            "✅ Moved to next stop successfully (via /next):",
+            updated
+          );
+          return updated;
+        }
+      }
+
+      // If we reach here, either /next returned 404 or failed — fall back to PATCH
+      const nextIndex = (record.currentIndex ?? 0) + 1;
+      const patchRes = await fetch("/api/admin/records", {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
           "x-admin-key": adminKey,
         },
         body: JSON.stringify({
-          // IMPORTANT: use trackingId (UUID) if available — server searches by it
           trackingId: record.trackingId || String(record._id),
           updates: { currentIndex: nextIndex },
         }),
         cache: "no-store",
       });
 
-      // helpful debug if server returns non-JSON or error
-      const text = await res.text().catch(() => "");
-      let body = null;
+      const patchText = await patchRes.text().catch(() => "");
+      let patchBody = null;
       try {
-        body = text ? JSON.parse(text) : null;
+        patchBody = patchText ? JSON.parse(patchText) : null;
       } catch (e) {
-        body = text;
+        patchBody = patchText;
       }
 
-      if (!res.ok) {
-        console.error("Server responded non-ok:", res.status, body);
+      if (!patchRes.ok) {
+        console.error(
+          "Server PATCH responded non-ok:",
+          patchRes.status,
+          patchBody
+        );
         throw new Error(
-          body?.error || JSON.stringify(body) || `HTTP ${res.status}`
+          patchBody?.error ||
+            JSON.stringify(patchBody) ||
+            `HTTP ${patchRes.status}`
         );
       }
 
-      const updated = body.updatedRecord || body;
+      const updated = patchBody.updatedRecord || patchBody;
 
       setRecords((prev) =>
-        prev.map((r) => (r.trackingId === record.trackingId ? updated : r))
+        prev.map((r) =>
+          String(r._id) === String(updated._id) ||
+          r.trackingId === updated.trackingId
+            ? updated
+            : r
+        )
       );
 
-      console.log("✅ Moved to next stop successfully:", updated);
+      console.log("✅ Moved to next stop successfully (via PATCH):", updated);
       return updated;
     } catch (err) {
       console.error("❌ Update failed (handleNext):", err);
@@ -336,7 +401,7 @@ export default function AdminPage() {
 
         <div className="lg:col-span-2 space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-gray-700">All Records</h2>
+            <h2 className="text-lg font-semibold text-gray-700">Records</h2>
             <button
               className="px-4 py-2 bg-gray-100 rounded text-sm"
               onClick={loadRecords}

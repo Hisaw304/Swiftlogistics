@@ -81,7 +81,14 @@ export default async function handler(req, res) {
           .limit(limit);
         const items = await cursor.toArray();
         const total = await col.countDocuments();
-        return res.json({ items, total, page, limit });
+        // normalize _id -> string and trim trackingId
+        const normalized = items.map((it) => {
+          if (it._id && typeof it._id !== "string") it._id = String(it._id);
+          if (it.trackingId && typeof it.trackingId === "string")
+            it.trackingId = it.trackingId.trim();
+          return it;
+        });
+        return res.json({ items: normalized, total, page, limit });
       } catch (err) {
         console.error(
           "List fetch error:",
@@ -357,6 +364,10 @@ export default async function handler(req, res) {
 
       try {
         await col.insertOne(doc);
+        // normalize before returning
+        if (doc._id && typeof doc._id !== "string") doc._id = String(doc._id);
+        if (doc.trackingId && typeof doc.trackingId === "string")
+          doc.trackingId = doc.trackingId.trim();
         return res.status(201).json(doc);
       } catch (err) {
         console.error("Create record error:", String(err));
@@ -376,32 +387,59 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: "Invalid JSON body" });
       }
 
-      const { trackingId, updates } = body;
+      // normalize incoming id/tracking candidates
+      const incoming =
+        (body.trackingId && String(body.trackingId).trim()) ||
+        (body.id && String(body.id).trim()) ||
+        (body._id && String(body._id).trim()) ||
+        (req.query && req.query.id && String(req.query.id).trim()) ||
+        "";
 
-      if (!trackingId) {
+      // debug log so we can see what's coming in (remove in production)
+      console.log("PATCH incoming identifier:", { incoming, rawBody: body });
+
+      if (!incoming) {
         return res.status(400).json({ error: "trackingId required" });
       }
 
       const now = new Date();
 
       // build a safe query for either trackingId or _id
-      let query = { $or: [{ trackingId }] };
+      const query = { $or: [] };
+
+      // always try exact trackingId match
+      query.$or.push({ trackingId: incoming });
+
+      // if it's a valid ObjectId, try matching _id too
       try {
-        query.$or.push({ _id: new ObjectId(trackingId) });
+        if (ObjectId.isValid(incoming)) {
+          query.$or.push({ _id: new ObjectId(incoming) });
+        }
       } catch {
         // ignore invalid ObjectId
       }
+
+      // Also support matching by existing _id in body._id if different
+      if (body._id && ObjectId.isValid(String(body._id))) {
+        try {
+          query.$or.push({ _id: new ObjectId(String(body._id)) });
+        } catch {}
+      }
+
+      // final debug
+      console.log("PATCH searching with query:", JSON.stringify(query));
 
       try {
         // Fetch existing doc to recompute derived fields reliably
         const existing = await col.findOne(query);
         if (!existing) {
+          console.error("PATCH: no existing doc found for query:", query);
           return res.status(404).json({ error: "Record not found" });
         }
 
         // Prepare updates object safely
         const updatesObj =
-          typeof updates === "object" && updates ? updates : {};
+          typeof body.updates === "object" && body.updates ? body.updates : {};
 
         // Merge route/currentIndex/status from updates or existing for recompute
         const route = Array.isArray(updatesObj.route)
@@ -498,12 +536,23 @@ export default async function handler(req, res) {
         );
 
         if (!result.value) {
+          console.error("PATCH: update returned no value:", query);
           return res.status(404).json({ error: "Record not found" });
         }
 
+        const updatedRecord = result.value;
+        // normalize before return
+        if (updatedRecord._id && typeof updatedRecord._id !== "string")
+          updatedRecord._id = String(updatedRecord._id);
+        if (
+          updatedRecord.trackingId &&
+          typeof updatedRecord.trackingId === "string"
+        )
+          updatedRecord.trackingId = updatedRecord.trackingId.trim();
+
         return res.status(200).json({
           message: "Record updated successfully",
-          updatedRecord: result.value,
+          updatedRecord,
         });
       } catch (err) {
         console.error(
