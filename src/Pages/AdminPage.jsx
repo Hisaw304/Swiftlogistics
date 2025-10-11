@@ -330,7 +330,7 @@ export default function AdminPage() {
     } catch (err) {
       // Only alert / console.error when *both* attempts fail.
       console.error("❌ Update failed (handleNext):", err);
-      alert("Failed to move to next stop: " + (err.message || String(err)));
+
       return null;
     }
   }
