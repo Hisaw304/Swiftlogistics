@@ -208,3 +208,152 @@ textarea.form-input:focus {
     padding: 0.65rem;
   }
 }
+/* Records table UI (paste into your global CSS) */
+
+/* Section heading */
+.records-table-heading {
+  color: var(--color-primary); /* uses your global root */
+  font-size: 1.125rem;
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+  letter-spacing: -0.02em;
+}
+
+/* Wrapper: purple border */
+.records-table-wrapper {
+  border: 2px solid var(--color-primary);
+  border-radius: 0.6rem;
+  overflow: hidden;
+  /* subtle lift */
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.04);
+}
+
+/* Table base */
+.records-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 720px;
+  font-size: 0.95rem;
+}
+
+/* THEAD: purple background + white text (as requested: tr bg = purple + white text) */
+.records-thead tr {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.records-thead th {
+  padding: 0.75rem 0.75rem;
+  text-align: left;
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.82rem;
+  letter-spacing: 0.02em;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* Body rows: subtle purple top border, keep body text dark for readability */
+.records-row {
+  border-top: 1px solid var(--color-primary);
+  background: #fff;
+  color: inherit;
+}
+
+/* Hover on rows for quick scanning */
+.records-table tbody tr.records-row:hover {
+  background: rgba(107, 33, 168, 0.04); /* subtle purple tint */
+}
+
+/* Cells */
+.records-table td {
+  padding: 0.75rem;
+  vertical-align: top;
+  border-bottom: none;
+  color: #0f172a; /* ensure readable dark text for body content */
+}
+
+/* Muted small text */
+.text-muted {
+  color: rgba(15, 23, 42, 0.55);
+}
+
+/* Thumbnail fallback */
+.records-noimage {
+  background: rgba(15, 23, 42, 0.04);
+  color: rgba(15, 23, 42, 0.4);
+}
+
+/* Buttons — using your root colors (primary = purple, accent = orange) */
+
+/* Base */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.6rem;
+  border-radius: 0.375rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: transform 120ms ease, filter 120ms ease;
+}
+
+/* Primary (Next Stop) - purple */
+.btn-primary {
+  background: var(--color-primary);
+  color: #fff;
+  border-color: var(--color-primary);
+}
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(0.96);
+}
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Accent (Edit) - orange */
+.btn-accent {
+  background: var(--color-secondary);
+  color: #fff;
+  border-color: var(--color-secondary);
+}
+.btn-accent:hover {
+  transform: translateY(-1px);
+  filter: brightness(0.96);
+}
+
+/* Danger (Delete) - subtle outline red to indicate destructive action */
+.btn-danger {
+  background: transparent;
+  color: #dc2626;
+  border-color: rgba(220, 38, 38, 0.12);
+}
+.btn-danger:hover {
+  background: rgba(220, 38, 38, 0.06);
+}
+
+/* small responsive tweaks */
+@media (max-width: 768px) {
+  .records-table {
+    min-width: 0;
+    font-size: 0.92rem;
+  }
+
+  .records-table-heading {
+    font-size: 1rem;
+  }
+  .records-thead th {
+    font-size: 0.75rem;
+    padding: 0.6rem;
+  }
+  .records-table td {
+    padding: 0.6rem;
+  }
+  .btn {
+    padding: 0.3rem 0.5rem;
+    font-size: 0.75rem;
+  }
+}
