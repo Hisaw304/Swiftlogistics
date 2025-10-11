@@ -25,18 +25,7 @@ export default async function handler(req, res) {
   }
 
   // Resolve id param directly from req.query.id (Next dynamic route)
-  let id = req.query?.id;
-  try {
-    if (typeof id === "string") {
-      id = decodeURIComponent(id).trim();
-    }
-  } catch (e) {}
-
-  // debug log to confirm id reaching this route
-  console.log("NEXT called for id:", id, "headers:", {
-    hasAdmin: !!req.headers["x-admin-key"],
-  });
-
+  const id = req.query?.id;
   if (!id) return res.status(400).json({ error: "Missing id param" });
 
   let conn;
@@ -57,7 +46,7 @@ export default async function handler(req, res) {
   try {
     const filter = ObjectId.isValid(id)
       ? { _id: new ObjectId(id) }
-      : { trackingId: id.trim() };
+      : { trackingId: id };
     const rec = await col.findOne(filter);
     if (!rec) return res.status(404).json({ error: "Not found" });
 
@@ -105,8 +94,6 @@ export default async function handler(req, res) {
     const updated = await col.findOne(filter);
     if (updated._id && typeof updated._id !== "string")
       updated._id = updated._id.toString();
-    if (updated.trackingId && typeof updated.trackingId === "string")
-      updated.trackingId = updated.trackingId.trim();
     return res.status(200).json(updated);
   } catch (err) {
     console.error(

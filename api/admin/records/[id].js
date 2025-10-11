@@ -43,15 +43,6 @@ export default async function handler(req, res) {
       id = undefined;
     }
   }
-
-  // clean up and decode
-  try {
-    if (typeof id === "string") {
-      id = decodeURIComponent(id);
-      id = id.trim();
-    }
-  } catch (e) {}
-
   if (id === "undefined" || id === "null" || id === "") id = undefined;
   // ------------------------------------------------------------------
 
@@ -72,8 +63,6 @@ export default async function handler(req, res) {
     }
     if (!doc) return res.status(404).json({ error: "Not found" });
     if (doc._id && typeof doc._id !== "string") doc._id = doc._id.toString();
-    if (doc.trackingId && typeof doc.trackingId === "string")
-      doc.trackingId = doc.trackingId.trim();
     return res.json(doc);
   }
 
@@ -91,9 +80,6 @@ export default async function handler(req, res) {
     } catch (e) {
       return res.status(400).json({ error: "Invalid JSON body" });
     }
-
-    // debug
-    console.log("[id].js PATCH for id:", id, "body keys:", Object.keys(body));
 
     const allowedTop = [
       "serviceType",
@@ -234,8 +220,6 @@ export default async function handler(req, res) {
       const updated = result.value;
       if (updated._id && typeof updated._id !== "string")
         updated._id = updated._id.toString();
-      if (updated.trackingId && typeof updated.trackingId === "string")
-        updated.trackingId = updated.trackingId.trim();
       return res.json(updated);
     } catch (err) {
       console.error("PATCH update error:", String(err));
@@ -266,8 +250,6 @@ export default async function handler(req, res) {
       const deleted = result.value;
       if (deleted._id && typeof deleted._id !== "string")
         deleted._id = deleted._id.toString();
-      if (deleted.trackingId && typeof deleted.trackingId === "string")
-        deleted.trackingId = deleted.trackingId.trim();
       return res.status(200).json({ message: "Record deleted", deleted });
     } catch (err) {
       console.error("DELETE /api/admin/records/[id] error:", err);

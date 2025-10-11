@@ -6,8 +6,8 @@ import TrackingModal from "../components/TrackingModal";
 function normalizeId(id) {
   if (!id) return null;
   if (typeof id === "object" && typeof id.toString === "function")
-    return id.toString().trim();
-  return String(id).trim();
+    return id.toString();
+  return String(id);
 }
 
 export default function AdminPage() {
@@ -66,14 +66,24 @@ export default function AdminPage() {
   }
 
   async function updateRecordWithKey(id, payload) {
-    // id may be trackingId or an _id string. Normalize & trim.
-    const idStr = normalizeId(id) || "";
-    if (!idStr) throw new Error("Missing id");
+    // id may be trackingId or an _id string. Use string form.
+    const idStr = String(id);
+    const adminKey =
+      typeof window !== "undefined" ? localStorage.getItem("adminKey") : null;
+    if (!adminKey) throw new Error("Missing admin key");
 
-    // Use central apiFetch (ensures x-admin-key is present)
-    const res = await apiFetch(`/api/admin/records`, {
+    // Use the index PATCH signature your server currently handles:
+    // { trackingId, updates }
+    const body = JSON.stringify({ trackingId: idStr, updates: payload });
+
+    const res = await fetch(`/api/admin/records`, {
       method: "PATCH",
-      body: JSON.stringify({ trackingId: idStr, updates: payload }),
+      headers: {
+        "Content-Type": "application/json",
+        "x-admin-key": adminKey,
+      },
+      body,
+      cache: "no-store",
     });
 
     let bodyJson = null;
@@ -85,6 +95,7 @@ export default function AdminPage() {
     }
 
     if (!res.ok) {
+      // if server returned helpful error, surface it
       throw new Error(
         bodyJson?.error || JSON.stringify(bodyJson) || `HTTP ${res.status}`
       );
@@ -100,8 +111,9 @@ export default function AdminPage() {
       } catch {}
     }
 
-    // If server didn't return a doc, force a reload and throw (keeps UI consistent)
+    // if the server didn't return a doc, fallback: reload records list (safe)
     if (!updated || (!updated.trackingId && !updated._id)) {
+      // best-effort resync
       await loadRecords();
       throw new Error(
         "Update completed but server didn't return updated record; reloaded list."
@@ -146,7 +158,7 @@ export default function AdminPage() {
         (body && (body.error || JSON.stringify(body))) || `HTTP ${res.status}`
       );
     }
-    // refresh authoritative list
+    // refresh
     await loadRecords();
   }
 
@@ -155,16 +167,9 @@ export default function AdminPage() {
     setError(null);
     try {
       const json = await fetchRecordsWithKey();
-      const items = Array.isArray(json.items)
-        ? json.items
-        : json.items || json || [];
-      // normalize each item: _id -> string, trim trackingId
-      const norm = items.map((it) => ({
-        ...it,
-        _id: normalizeId(it._id),
-        trackingId: (it.trackingId || "").trim(),
-      }));
-      setRecords(norm);
+      setRecords(
+        Array.isArray(json.items) ? json.items : json.items || json || []
+      );
     } catch (err) {
       setError(err.message || "Failed to load records.");
     } finally {
@@ -176,8 +181,6 @@ export default function AdminPage() {
     const created = await createRecordWithKey(payload);
     const createdSafe = { ...created, _id: normalizeId(created._id) };
     setRecords((s) => [createdSafe, ...s]);
-    // keep UI authoritative
-    await loadRecords();
     return created;
   }
 
@@ -186,24 +189,16 @@ export default function AdminPage() {
       const updated = await updateRecordWithKey(idOrTrackingId, payload);
 
       const updatedIdStr = normalizeId(updated._id);
-      const updatedTrackingId = (updated.trackingId || "").trim();
+      const updatedTrackingId = updated.trackingId;
 
       setRecords((s) =>
         s.map((r) => {
           const rIdStr = normalizeId(r._id);
-          const rTid = (r.trackingId || "").trim();
-          if (
-            rIdStr === updatedIdStr ||
-            (rTid && updatedTrackingId && rTid === updatedTrackingId)
-          ) {
-            return { ...r, ...updated }; // merge to preserve any fields the UI had
-          }
-          return r;
+          return rIdStr === updatedIdStr || r.trackingId === updatedTrackingId
+            ? { ...r, ...updated } // merge to preserve any fields the UI had
+            : r;
         })
       );
-
-      // ensure authoritative state
-      await loadRecords();
 
       setEditing(null);
       return updated;
@@ -231,17 +226,26 @@ export default function AdminPage() {
 
       console.log("✅ Found record:", record.trackingId, record._id);
 
-      // Try /next endpoint first (preferred) — use apiFetch for consistent headers
-      const idForRoute = normalizeId(record.trackingId || record._id);
+      const adminKey =
+        typeof window !== "undefined" ? localStorage.getItem("adminKey") : null;
+      if (!adminKey) throw new Error("Missing admin key");
+
+      // Try /next endpoint first (preferred) — swallow 404s and try fallback
+      const idForRoute = encodeURIComponent(
+        record.trackingId || String(record._id)
+      );
       let nextRes;
       try {
-        nextRes = await apiFetch(
-          `/api/admin/records/${encodeURIComponent(idForRoute)}/next`,
-          {
-            method: "POST",
-          }
-        );
+        nextRes = await fetch(`/api/admin/records/${idForRoute}/next`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-admin-key": adminKey,
+          },
+          cache: "no-store",
+        });
       } catch (err) {
+        // network failure; treat like a non-ok response so fallback will run
         console.warn(
           "Network error calling /next, will try PATCH fallback",
           err
@@ -250,30 +254,26 @@ export default function AdminPage() {
       }
 
       if (nextRes && nextRes.ok) {
-        const updated = await nextRes.json().catch(() => null);
-
-        // merge updated into local state
+        const body = await nextRes.json().catch(() => null);
+        const updated = body;
+        // robust updater: match by _id or trackingId
         setRecords((prev) =>
-          prev.map((r) => {
-            const rId = normalizeId(r._id);
-            const uId = normalizeId(updated?._id);
-            const rTid = (r.trackingId || "").trim();
-            const uTid = (updated?.trackingId || "").trim();
-            if (rId === uId || (rTid && uTid && rTid === uTid)) {
-              return { ...r, ...updated };
-            }
-            return r;
-          })
+          prev.map((r) =>
+            String(r._id) === String(updated._id) ||
+            (r.trackingId &&
+              updated.trackingId &&
+              r.trackingId === updated.trackingId)
+              ? updated
+              : r
+          )
         );
-
-        // refresh authoritative list
-        await loadRecords();
-
         console.log("✅ moved to next (via /next):", updated);
         return updated;
       }
 
+      // If /next returned 404 or other non-ok, *don't* throw immediately — try PATCH fallback
       if (nextRes && !nextRes.ok) {
+        // only log at debug level since fallback will handle it
         console.debug(
           "Server /next responded non-ok:",
           nextRes.status,
@@ -283,12 +283,18 @@ export default function AdminPage() {
 
       // Fallback: PATCH collection endpoint (update currentIndex)
       const nextIndex = (record.currentIndex ?? 0) + 1;
-      const patchRes = await apiFetch("/api/admin/records", {
+      const patchRes = await fetch("/api/admin/records", {
         method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-key": adminKey,
+        },
         body: JSON.stringify({
-          trackingId: normalizeId(record.trackingId || record._id),
+          // prefer trackingId (server code supports query by ObjectId as fallback)
+          trackingId: record.trackingId || String(record._id),
           updates: { currentIndex: nextIndex },
         }),
+        cache: "no-store",
       });
 
       const text = await patchRes.text().catch(() => "");
@@ -300,6 +306,7 @@ export default function AdminPage() {
       }
 
       if (!patchRes.ok) {
+        // now this is a real problem — both endpoints failed
         console.error("Server PATCH responded non-ok:", patchRes.status, body);
         throw new Error(
           body?.error || JSON.stringify(body) || `HTTP ${patchRes.status}`
@@ -307,31 +314,26 @@ export default function AdminPage() {
       }
 
       const updated = body.updatedRecord || body;
-
       setRecords((prev) =>
-        prev.map((r) => {
-          const rId = normalizeId(r._id);
-          const uId = normalizeId(updated?._id);
-          const rTid = (r.trackingId || "").trim();
-          const uTid = (updated?.trackingId || "").trim();
-          if (rId === uId || (rTid && uTid && rTid === uTid)) {
-            return { ...r, ...updated };
-          }
-          return r;
-        })
+        prev.map((r) =>
+          String(r._id) === String(updated._id) ||
+          (r.trackingId &&
+            updated.trackingId &&
+            r.trackingId === updated.trackingId)
+            ? updated
+            : r
+        )
       );
-
-      // refresh authoritative list
-      await loadRecords();
 
       console.log("✅ moved to next (via PATCH):", updated);
       return updated;
     } catch (err) {
+      // Only alert / console.error when *both* attempts fail.
       console.error("❌ Update failed (handleNext):", err);
+
       return null;
     }
   }
-
   return (
     <div className="max-w-6xl mx-auto py-10 px-4">
       <h1 className="text-3xl font-bold mb-6 text-gray-800">
