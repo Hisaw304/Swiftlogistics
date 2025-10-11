@@ -18,7 +18,6 @@
       "src": "/api/admin/records/([^/]+)/next$",
       "dest": "/api/admin/records/[id]/next.js"
     },
-
     { "src": "/api/(.*)", "dest": "/api/$1" },
     { "src": "/(.*)", "dest": "/index.html" }
   ]
