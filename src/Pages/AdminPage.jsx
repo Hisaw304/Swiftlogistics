@@ -230,13 +230,13 @@ export default function AdminPage() {
         typeof window !== "undefined" ? localStorage.getItem("adminKey") : null;
       if (!adminKey) throw new Error("Missing admin key");
 
-      // prefer calling the dedicated endpoint
+      // Try /next endpoint first (preferred) — swallow 404s and try fallback
       const idForRoute = encodeURIComponent(
         record.trackingId || String(record._id)
       );
-      let res;
+      let nextRes;
       try {
-        res = await fetch(`/api/admin/records/${idForRoute}/next`, {
+        nextRes = await fetch(`/api/admin/records/${idForRoute}/next`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -245,48 +245,43 @@ export default function AdminPage() {
           cache: "no-store",
         });
       } catch (err) {
-        console.warn("Calling /next endpoint failed to reach server:", err);
-        res = null;
+        // network failure; treat like a non-ok response so fallback will run
+        console.warn(
+          "Network error calling /next, will try PATCH fallback",
+          err
+        );
+        nextRes = null;
       }
 
-      // If /next endpoint responded, parse and handle it
-      if (res) {
-        const text = await res.text().catch(() => "");
-        let body = null;
-        try {
-          body = text ? JSON.parse(text) : null;
-        } catch (e) {
-          body = text;
-        }
-
-        if (!res.ok) {
-          console.error("Server /next responded non-ok:", res.status, body);
-          // If 404 on /next, fall back to PATCH below
-          if (res.status !== 404) {
-            throw new Error(
-              body?.error || JSON.stringify(body) || `HTTP ${res.status}`
-            );
-          }
-        } else {
-          const updated = body;
-          // normalize _id/trackingId may be handled server-side; update local state robustly
-          setRecords((prev) =>
-            prev.map((r) =>
-              String(r._id) === String(updated._id) ||
-              r.trackingId === updated.trackingId
-                ? updated
-                : r
-            )
-          );
-          console.log(
-            "✅ Moved to next stop successfully (via /next):",
-            updated
-          );
-          return updated;
-        }
+      if (nextRes && nextRes.ok) {
+        const body = await nextRes.json().catch(() => null);
+        const updated = body;
+        // robust updater: match by _id or trackingId
+        setRecords((prev) =>
+          prev.map((r) =>
+            String(r._id) === String(updated._id) ||
+            (r.trackingId &&
+              updated.trackingId &&
+              r.trackingId === updated.trackingId)
+              ? updated
+              : r
+          )
+        );
+        console.log("✅ moved to next (via /next):", updated);
+        return updated;
       }
 
-      // If we reach here, either /next returned 404 or failed — fall back to PATCH
+      // If /next returned 404 or other non-ok, *don't* throw immediately — try PATCH fallback
+      if (nextRes && !nextRes.ok) {
+        // only log at debug level since fallback will handle it
+        console.debug(
+          "Server /next responded non-ok:",
+          nextRes.status,
+          await nextRes.text().catch(() => "[non-json]")
+        );
+      }
+
+      // Fallback: PATCH collection endpoint (update currentIndex)
       const nextIndex = (record.currentIndex ?? 0) + 1;
       const patchRes = await fetch("/api/admin/records", {
         method: "PATCH",
@@ -295,49 +290,48 @@ export default function AdminPage() {
           "x-admin-key": adminKey,
         },
         body: JSON.stringify({
+          // prefer trackingId (server code supports query by ObjectId as fallback)
           trackingId: record.trackingId || String(record._id),
           updates: { currentIndex: nextIndex },
         }),
         cache: "no-store",
       });
 
-      const patchText = await patchRes.text().catch(() => "");
-      let patchBody = null;
+      const text = await patchRes.text().catch(() => "");
+      let body = null;
       try {
-        patchBody = patchText ? JSON.parse(patchText) : null;
+        body = text ? JSON.parse(text) : null;
       } catch (e) {
-        patchBody = patchText;
+        body = text;
       }
 
       if (!patchRes.ok) {
-        console.error(
-          "Server PATCH responded non-ok:",
-          patchRes.status,
-          patchBody
-        );
+        // now this is a real problem — both endpoints failed
+        console.error("Server PATCH responded non-ok:", patchRes.status, body);
         throw new Error(
-          patchBody?.error ||
-            JSON.stringify(patchBody) ||
-            `HTTP ${patchRes.status}`
+          body?.error || JSON.stringify(body) || `HTTP ${patchRes.status}`
         );
       }
 
-      const updated = patchBody.updatedRecord || patchBody;
-
+      const updated = body.updatedRecord || body;
       setRecords((prev) =>
         prev.map((r) =>
           String(r._id) === String(updated._id) ||
-          r.trackingId === updated.trackingId
+          (r.trackingId &&
+            updated.trackingId &&
+            r.trackingId === updated.trackingId)
             ? updated
             : r
         )
       );
 
-      console.log("✅ Moved to next stop successfully (via PATCH):", updated);
+      console.log("✅ moved to next (via PATCH):", updated);
       return updated;
     } catch (err) {
+      // Only alert / console.error when *both* attempts fail.
       console.error("❌ Update failed (handleNext):", err);
       alert("Failed to move to next stop: " + (err.message || String(err)));
+      return null;
     }
   }
 
