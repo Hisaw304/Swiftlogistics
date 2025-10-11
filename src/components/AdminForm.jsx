@@ -473,16 +473,25 @@ export default function AdminForm({
   }
 
   return (
-    <form onSubmit={submit} className="bg-white p-4 rounded shadow space-y-4">
-      <div className="grid grid-cols-1 gap-4">
+    <form
+      onSubmit={submit}
+      className="admin-form bg-white p-6 rounded-xl shadow space-y-6"
+    >
+      {/* Top form heading (centered) */}
+      <h2 className="form-heading text-center text-2xl md:text-3xl font-bold">
+        Shipment Administration Form
+      </h2>
+
+      <div className="grid grid-cols-1 gap-6">
         {/* Shipment Details Card */}
-        <div className="bg-gray-50 p-4 rounded border">
-          <h3 className="font-semibold mb-2">Shipment Details</h3>
-          <div className="space-y-2">
+        <div className="form-card bg-gray-50 p-4 rounded-xl">
+          <h3 className="card-title">Shipment Details</h3>
+
+          <div className="space-y-3">
             <label className="block text-sm">
-              Service type
+              <div className="label-text">Service type</div>
               <select
-                className="mt-1 p-2 w-full border rounded"
+                className="mt-1 p-3 w-full border rounded form-select"
                 value={serviceType}
                 onChange={(e) => setServiceType(e.target.value)}
               >
@@ -495,9 +504,9 @@ export default function AdminForm({
             </label>
 
             <label className="block text-sm">
-              Product description
+              <div className="label-text">Product description</div>
               <input
-                className="mt-1 p-2 w-full border rounded"
+                className="mt-1 p-3 w-full border rounded form-input"
                 placeholder="Product name / short desc"
                 value={productDescription}
                 onChange={(e) => setProductDescription(e.target.value)}
@@ -505,25 +514,25 @@ export default function AdminForm({
               />
             </label>
 
-            <div className="flex gap-2">
+            <div className="flex gap-3">
               <label className="flex-1 text-sm">
-                Quantity
+                <div className="label-text">Quantity</div>
                 <input
                   type="number"
                   min="1"
-                  className="mt-1 p-2 w-full border rounded"
+                  className="mt-1 p-3 w-full border rounded form-input"
                   value={quantity}
                   onChange={(e) => setQuantity(Number(e.target.value))}
                 />
               </label>
 
               <label className="w-40 text-sm">
-                Weight (kg)
+                <div className="label-text">Weight (kg)</div>
                 <input
                   type="number"
                   min="0"
                   step="0.01"
-                  className="mt-1 p-2 w-full border rounded"
+                  className="mt-1 p-3 w-full border rounded form-input"
                   value={weightKg}
                   onChange={(e) => setWeightKg(e.target.value)}
                 />
@@ -531,9 +540,9 @@ export default function AdminForm({
             </div>
 
             <label className="block text-sm">
-              Shipment notes
+              <div className="label-text">Shipment notes</div>
               <textarea
-                className="mt-1 p-2 w-full border rounded"
+                className="mt-1 p-3 w-full border rounded form-input"
                 value={shipmentDetails}
                 onChange={(e) => setShipmentDetails(e.target.value)}
                 rows={3}
@@ -541,9 +550,9 @@ export default function AdminForm({
             </label>
 
             <label className="block text-sm">
-              Internal description
+              <div className="label-text">Internal description</div>
               <textarea
-                className="mt-1 p-2 w-full border rounded"
+                className="mt-1 p-3 w-full border rounded form-input"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={2}
@@ -553,13 +562,13 @@ export default function AdminForm({
         </div>
 
         {/* Origin Card */}
-        <div className="bg-gray-50 p-4 rounded-xl border shadow-sm space-y-3">
-          <h3 className="font-semibold text-lg mb-2">Origin (Sender)</h3>
+        <div className="form-card bg-gray-50 p-4 rounded-xl shadow-sm space-y-3">
+          <h3 className="card-title">Origin (Sender)</h3>
 
           <label className="block text-sm">
-            Sender name
+            <div className="label-text">Sender name</div>
             <input
-              className="mt-1 p-2 w-full border rounded"
+              className="mt-1 p-3 w-full border rounded form-input"
               value={originName}
               onChange={(e) => setOriginName(e.target.value)}
               placeholder="John Doe"
@@ -567,9 +576,9 @@ export default function AdminForm({
           </label>
 
           <label className="block text-sm">
-            Street address
+            <div className="label-text">Street address</div>
             <input
-              className="mt-1 p-2 w-full border rounded"
+              className="mt-1 p-3 w-full border rounded form-input"
               value={originAddressFull}
               onChange={(e) => setOriginAddressFull(e.target.value)}
               onBlur={() =>
@@ -581,19 +590,19 @@ export default function AdminForm({
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <input
-              className="p-2 border rounded w-full"
+              className="p-3 border rounded w-full form-input"
               placeholder="City"
               value={originCity}
               onChange={(e) => setOriginCity(e.target.value)}
             />
             <input
-              className="p-2 border rounded w-full"
+              className="p-3 border rounded w-full form-input"
               placeholder="State"
               value={originState}
               onChange={(e) => setOriginState(e.target.value)}
             />
             <input
-              className="p-2 border rounded w-full"
+              className="p-3 border rounded w-full form-input"
               placeholder="ZIP"
               value={originZip}
               onChange={(e) => setOriginZip(e.target.value)}
@@ -602,13 +611,13 @@ export default function AdminForm({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <input
-              className="p-2 border rounded w-full"
+              className="p-3 border rounded w-full form-input"
               placeholder="Latitude"
               value={originLat}
               onChange={(e) => setOriginLat(e.target.value)}
             />
             <input
-              className="p-2 border rounded w-full"
+              className="p-3 border rounded w-full form-input"
               placeholder="Longitude"
               value={originLng}
               onChange={(e) => setOriginLng(e.target.value)}
@@ -617,13 +626,13 @@ export default function AdminForm({
         </div>
 
         {/* Destination Card */}
-        <div className="bg-gray-50 p-4 rounded-xl border shadow-sm space-y-3">
-          <h3 className="font-semibold text-lg mb-2">Destination (Receiver)</h3>
+        <div className="form-card bg-gray-50 p-4 rounded-xl shadow-sm space-y-3">
+          <h3 className="card-title">Destination (Receiver)</h3>
 
           <label className="block text-sm">
-            Receiver name
+            <div className="label-text">Receiver name</div>
             <input
-              className="mt-1 p-2 w-full border rounded"
+              className="mt-1 p-3 w-full border rounded form-input"
               value={receiverName}
               onChange={(e) => setReceiverName(e.target.value)}
               placeholder="Jane Smith"
@@ -631,10 +640,10 @@ export default function AdminForm({
           </label>
 
           <label className="block text-sm">
-            Receiver email
+            <div className="label-text">Receiver email</div>
             <input
               type="email"
-              className="mt-1 p-2 w-full border rounded"
+              className="mt-1 p-3 w-full border rounded form-input"
               value={receiverEmail}
               onChange={(e) => setReceiverEmail(e.target.value)}
               placeholder="jane@example.com"
@@ -642,9 +651,9 @@ export default function AdminForm({
           </label>
 
           <label className="block text-sm">
-            Street address
+            <div className="label-text">Street address</div>
             <input
-              className="mt-1 p-2 w-full border rounded"
+              className="mt-1 p-3 w-full border rounded form-input"
               value={destAddressFull}
               onChange={(e) => setDestAddressFull(e.target.value)}
               onBlur={() =>
@@ -656,19 +665,19 @@ export default function AdminForm({
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <input
-              className="p-2 border rounded w-full"
+              className="p-3 border rounded w-full form-input"
               placeholder="City"
               value={destCity}
               onChange={(e) => setDestCity(e.target.value)}
             />
             <input
-              className="p-2 border rounded w-full"
+              className="p-3 border rounded w-full form-input"
               placeholder="State"
               value={destState}
               onChange={(e) => setDestState(e.target.value)}
             />
             <input
-              className="p-2 border rounded w-full"
+              className="p-3 border rounded w-full form-input"
               placeholder="ZIP"
               value={destZip}
               onChange={(e) => setDestZip(e.target.value)}
@@ -677,13 +686,13 @@ export default function AdminForm({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <input
-              className="p-2 border rounded w-full"
+              className="p-3 border rounded w-full form-input"
               placeholder="Latitude"
               value={destLat}
               onChange={(e) => setDestLat(e.target.value)}
             />
             <input
-              className="p-2 border rounded w-full"
+              className="p-3 border rounded w-full form-input"
               placeholder="Longitude"
               value={destLng}
               onChange={(e) => setDestLng(e.target.value)}
@@ -691,10 +700,10 @@ export default function AdminForm({
           </div>
 
           <label className="block text-sm">
-            Expected delivery date
+            <div className="label-text">Expected delivery date</div>
             <input
               type="date"
-              className="mt-1 p-2 w-full border rounded"
+              className="mt-1 p-3 w-full border rounded form-input"
               value={destExpectedDeliveryDate}
               onChange={(e) => setDestExpectedDeliveryDate(e.target.value)}
             />
@@ -704,42 +713,43 @@ export default function AdminForm({
 
       {/* Dates, Image, Status and Actions row */}
       <div className="grid grid-cols-1 gap-4">
-        <div className="bg-gray-50 p-4 rounded border">
-          <h4 className="font-medium mb-2">Dates</h4>
+        <div className="form-card bg-gray-50 p-4 rounded-xl">
+          <h4 className="card-title small">Dates</h4>
+
           <label className="block text-sm mb-2">
-            Shipment date
+            <div className="label-text">Shipment date</div>
             <input
               type="date"
-              className="mt-1 p-2 w-full border rounded"
+              className="mt-1 p-3 w-full border rounded form-input"
               value={shipmentDate}
               onChange={(e) => setShipmentDate(e.target.value)}
             />
           </label>
 
           <label className="block text-sm">
-            Expected delivery
+            <div className="label-text">Expected delivery</div>
             <input
               type="date"
-              className="mt-1 p-2 w-full border rounded"
+              className="mt-1 p-3 w-full border rounded form-input"
               value={expectedDeliveryDate}
               onChange={(e) => setExpectedDeliveryDate(e.target.value)}
             />
           </label>
         </div>
 
-        <div className="bg-gray-50 p-4 rounded border">
-          <h4 className="font-medium mb-2">Image</h4>
+        <div className="form-card bg-gray-50 p-4 rounded-xl">
+          <h4 className="card-title small">Image</h4>
           <ImageUploader
             initialUrl={imageUrl}
             onUploadComplete={(u) => setImageUrl(u)}
           />
         </div>
 
-        <div className="bg-gray-50 p-4 rounded border">
-          <h4 className="font-medium mb-2">Status & Actions</h4>
-          <div className="space-y-2">
+        <div className="form-card bg-gray-50 p-4 rounded-xl">
+          <h4 className="card-title small">Status & Actions</h4>
+          <div className="space-y-3">
             <select
-              className="p-2 w-full border rounded"
+              className="p-3 w-full border rounded form-select"
               value={status}
               onChange={(e) => {
                 const newStatus = e.target.value;
@@ -753,7 +763,7 @@ export default function AdminForm({
                   origin: initial?.origin || null,
                 });
 
-                // only set if changed (avoids unnecessary state churn)
+                // preserve your original behavior
                 setProgressPct(d.progressPct);
                 if (d.currentIndex !== currentIndex)
                   setCurrentIndex(d.currentIndex);
@@ -770,11 +780,11 @@ export default function AdminForm({
               <option>Exception</option>
             </select>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               <button
                 type="submit"
                 disabled={saving}
-                className="px-4 py-2 bg-blue-600 text-white rounded"
+                className="px-4 py-2 btn-primary rounded"
               >
                 {saving
                   ? "Saving..."
@@ -786,7 +796,7 @@ export default function AdminForm({
               {mode === "edit" && (
                 <button
                   type="button"
-                  className="px-3 py-2 bg-gray-100 rounded"
+                  className="px-3 py-2 btn-secondary rounded"
                   onClick={onCancel}
                 >
                   Cancel
