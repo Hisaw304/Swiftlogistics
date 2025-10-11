@@ -73,23 +73,18 @@ export default function AdminPage() {
   }
 
   async function updateRecordWithKey(id, payload) {
-    // id may be trackingId or an _id string. Use string form.
     const idStr = String(id);
     const adminKey =
       typeof window !== "undefined" ? localStorage.getItem("adminKey") : null;
     if (!adminKey) throw new Error("Missing admin key");
 
-    // Use the index PATCH signature your server currently handles:
-    // { trackingId, updates }
-    const body = JSON.stringify({ trackingId: idStr, updates: payload });
-
-    const res = await fetch(`/api/admin/records`, {
+    const res = await fetch(`/api/admin/records/${idStr}`, {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
         "x-admin-key": adminKey,
       },
-      body,
+      body: JSON.stringify(payload),
       cache: "no-store",
     });
 
@@ -102,25 +97,21 @@ export default function AdminPage() {
     }
 
     if (!res.ok) {
-      // if server returned helpful error, surface it
       throw new Error(
         bodyJson?.error || JSON.stringify(bodyJson) || `HTTP ${res.status}`
       );
     }
 
-    // server should return the updated document in bodyJson.updatedRecord OR the doc directly
+    // server returns { updatedRecord: { ... } } or the doc itself
     const updated = bodyJson.updatedRecord || bodyJson;
 
-    // normalize _id if it's an object
     if (updated && updated._id && typeof updated._id !== "string") {
       try {
         updated._id = updated._id.toString();
       } catch {}
     }
 
-    // if the server didn't return a doc, fallback: reload records list (safe)
     if (!updated || (!updated.trackingId && !updated._id)) {
-      // best-effort resync
       await loadRecords();
       throw new Error(
         "Update completed but server didn't return updated record; reloaded list."
