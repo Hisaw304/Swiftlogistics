@@ -33,9 +33,15 @@ export default function AdminPage() {
   }
 
   // central fetch that always attaches adminKey from state
+  // central fetch that always attaches adminKey from localStorage (reliably)
   async function apiFetch(path, opts = {}) {
     const headers = (opts.headers = opts.headers || {});
-    headers["x-admin-key"] = adminKey || "";
+    // ALWAYS read from localStorage so we don't rely on stale closure state
+    const key =
+      typeof window !== "undefined"
+        ? localStorage.getItem("adminKey") || ""
+        : adminKey || "";
+    if (key) headers["x-admin-key"] = key;
     if (!headers["Content-Type"] && opts.body) {
       headers["Content-Type"] = "application/json";
     }
@@ -146,20 +152,36 @@ export default function AdminPage() {
       alert("Missing id");
       return;
     }
-    const res = await apiFetch(
-      `/api/admin/records/${encodeURIComponent(idStr)}`,
-      {
-        method: "DELETE",
-      }
+
+    // optimistic removal so UI is responsive even if server reply is delayed
+    setRecords((prev) =>
+      prev.filter((r) => normalizeId(r._id) !== idStr && r.trackingId !== idStr)
     );
-    const body = await res.json().catch(() => null);
-    if (!res.ok) {
-      throw new Error(
-        (body && (body.error || JSON.stringify(body))) || `HTTP ${res.status}`
+
+    try {
+      const res = await apiFetch(
+        `/api/admin/records/${encodeURIComponent(idStr)}`,
+        {
+          method: "DELETE",
+        }
       );
+
+      // server returns JSON; but handle if it doesn't
+      const body = await res.json().catch(() => null);
+      if (!res.ok) {
+        // if deletion failed, reload list to re-sync UI and surface error
+        await loadRecords().catch(() => {});
+        throw new Error(
+          (body && (body.error || JSON.stringify(body))) || `HTTP ${res.status}`
+        );
+      }
+
+      // success — ensure UI is in sync
+      await loadRecords();
+    } catch (err) {
+      console.error("Delete failed:", err);
+      alert("Delete failed: " + (err.message || String(err)));
     }
-    // refresh
-    await loadRecords();
   }
 
   async function loadRecords() {
@@ -230,74 +252,22 @@ export default function AdminPage() {
         typeof window !== "undefined" ? localStorage.getItem("adminKey") : null;
       if (!adminKey) throw new Error("Missing admin key");
 
-      // Try /next endpoint first (preferred) — swallow 404s and try fallback
-      const idForRoute = encodeURIComponent(
-        record.trackingId || String(record._id)
-      );
-      let nextRes;
-      try {
-        nextRes = await fetch(`/api/admin/records/${idForRoute}/next`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-admin-key": adminKey,
-          },
-          cache: "no-store",
-        });
-      } catch (err) {
-        // network failure; treat like a non-ok response so fallback will run
-        console.warn(
-          "Network error calling /next, will try PATCH fallback",
-          err
-        );
-        nextRes = null;
-      }
-
-      if (nextRes && nextRes.ok) {
-        const body = await nextRes.json().catch(() => null);
-        const updated = body;
-        // robust updater: match by _id or trackingId
-        setRecords((prev) =>
-          prev.map((r) =>
-            String(r._id) === String(updated._id) ||
-            (r.trackingId &&
-              updated.trackingId &&
-              r.trackingId === updated.trackingId)
-              ? updated
-              : r
-          )
-        );
-        console.log("✅ moved to next (via /next):", updated);
-        return updated;
-      }
-
-      // If /next returned 404 or other non-ok, *don't* throw immediately — try PATCH fallback
-      if (nextRes && !nextRes.ok) {
-        // only log at debug level since fallback will handle it
-        console.debug(
-          "Server /next responded non-ok:",
-          nextRes.status,
-          await nextRes.text().catch(() => "[non-json]")
-        );
-      }
-
-      // Fallback: PATCH collection endpoint (update currentIndex)
+      // Use PATCH collection endpoint (single reliable path)
       const nextIndex = (record.currentIndex ?? 0) + 1;
-      const patchRes = await fetch("/api/admin/records", {
+      const res = await fetch("/api/admin/records", {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
           "x-admin-key": adminKey,
         },
         body: JSON.stringify({
-          // prefer trackingId (server code supports query by ObjectId as fallback)
           trackingId: record.trackingId || String(record._id),
           updates: { currentIndex: nextIndex },
         }),
         cache: "no-store",
       });
 
-      const text = await patchRes.text().catch(() => "");
+      const text = await res.text().catch(() => "");
       let body = null;
       try {
         body = text ? JSON.parse(text) : null;
@@ -305,15 +275,15 @@ export default function AdminPage() {
         body = text;
       }
 
-      if (!patchRes.ok) {
-        // now this is a real problem — both endpoints failed
-        console.error("Server PATCH responded non-ok:", patchRes.status, body);
+      if (!res.ok) {
+        console.error("Server PATCH responded non-ok:", res.status, body);
         throw new Error(
-          body?.error || JSON.stringify(body) || `HTTP ${patchRes.status}`
+          body?.error || JSON.stringify(body) || `HTTP ${res.status}`
         );
       }
 
       const updated = body.updatedRecord || body;
+
       setRecords((prev) =>
         prev.map((r) =>
           String(r._id) === String(updated._id) ||
@@ -328,12 +298,11 @@ export default function AdminPage() {
       console.log("✅ moved to next (via PATCH):", updated);
       return updated;
     } catch (err) {
-      // Only alert / console.error when *both* attempts fail.
       console.error("❌ Update failed (handleNext):", err);
-
       return null;
     }
   }
+
   return (
     <div className="max-w-6xl mx-auto py-10 px-4">
       <h1 className="text-3xl font-bold mb-6 text-gray-800">
