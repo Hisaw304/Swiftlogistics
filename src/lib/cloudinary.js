@@ -10,7 +10,7 @@ export function unsignedUploadUrl() {
 
 // Optional: call your serverless signature endpoint to get timestamp+signature
 export async function fetchSignedParams() {
-  const res = await fetch("/api/upload/sign");
+  const res = await fetch("/api/uploads/sign");
   if (!res.ok) throw new Error("Failed to get upload signature");
   return res.json();
 }
