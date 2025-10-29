@@ -778,6 +778,7 @@ export default function AdminForm({
               <option>Out for Delivery</option>
               <option>Delivered</option>
               <option>Exception</option>
+              <option>Out for Delivery (Rescheduled)</option>
             </select>
 
             <div className="flex items-center gap-3">

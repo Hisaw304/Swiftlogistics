@@ -12,7 +12,7 @@ const statusInfo = {
     color: "text-gray-600",
   },
   "on hold": {
-    text: "⚠️ Your order is currently on hold. Please contact support for details.",
+    text: "⚠️ Your order is currently on hold. Please contact support for more details.",
     color: "text-yellow-700",
     link: "/contact",
   },
@@ -32,6 +32,10 @@ const statusInfo = {
     text: "❌ There was an issue with your delivery. Please contact support.",
     color: "text-red-700",
     link: "/contact",
+  },
+  "out for delivery (rescheduled)": {
+    text: "🚚 Your delivery has been rescheduled due to unexpected courier delays in your area. It will be delivered on the next available route.",
+    color: "text-orange-700",
   },
 };
 
